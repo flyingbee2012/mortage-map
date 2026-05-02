@@ -413,11 +413,31 @@ export default function JiuxiangMortgageMapDemo() {
   const [route, setRoute] = useState<Checkpoint[]>(
     () => loadStoredRoute() ?? DEFAULT_ROUTE,
   );
+  // Snapshot of the route taken when edit mode begins, so Cancel can revert.
+  const editSnapshotRef = useRef<Checkpoint[] | null>(null);
 
-  // Persist route changes to localStorage.
+  // Persist route changes to localStorage — but only when NOT editing,
+  // so edits stay tentative until the user clicks Done.
   useEffect(() => {
+    if (editMode) return;
     saveStoredRoute(route);
-  }, [route]);
+  }, [route, editMode]);
+
+  const startEditingRoute = () => {
+    editSnapshotRef.current = route;
+    setEditMode(true);
+  };
+  const finishEditingRoute = () => {
+    editSnapshotRef.current = null;
+    setEditMode(false);
+  };
+  const cancelEditingRoute = () => {
+    if (editSnapshotRef.current) {
+      setRoute(editSnapshotRef.current);
+    }
+    editSnapshotRef.current = null;
+    setEditMode(false);
+  };
 
   // Persist mortgage inputs to localStorage.
   useEffect(() => {
@@ -820,17 +840,29 @@ export default function JiuxiangMortgageMapDemo() {
               <h2 className="text-sm font-semibold text-neutral-200">
                 Route ({route.length} checkpoints)
               </h2>
-              <button
-                className={`rounded-lg border px-2 py-1 text-xs transition ${
-                  editMode
-                    ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30"
-                    : "border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-700"
-                }`}
-                type="button"
-                onClick={() => setEditMode((value) => !value)}
-              >
-                {editMode ? "Done editing" : "Edit route"}
-              </button>
+              <div className="flex items-center gap-2">
+                {editMode && (
+                  <button
+                    className="rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-700 transition"
+                    type="button"
+                    onClick={cancelEditingRoute}
+                    title="Discard all edits and revert to the route from when you started editing"
+                  >
+                    Cancel
+                  </button>
+                )}
+                <button
+                  className={`rounded-lg border px-2 py-1 text-xs transition ${
+                    editMode
+                      ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30"
+                      : "border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-700"
+                  }`}
+                  type="button"
+                  onClick={editMode ? finishEditingRoute : startEditingRoute}
+                >
+                  {editMode ? "Done editing" : "Edit route"}
+                </button>
+              </div>
             </div>
 
             {editMode && (
