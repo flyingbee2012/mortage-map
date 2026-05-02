@@ -575,20 +575,34 @@ export default function JiuxiangMortgageMapDemo() {
             : [0, route.length - 1];
     } else {
       const bounds = map.getBounds();
+      const visible: number[] = [];
       if (!bounds) {
-        indicesToRender = route.map((_, i) => i);
+        route.forEach((_, i) => visible.push(i));
       } else {
-        const visible: number[] = [];
         route.forEach((cp, i) => {
           if (bounds.contains({ lat: cp.lat, lng: cp.lng })) {
             visible.push(i);
           }
         });
-        // Always include start and end so the green/red anchors stay visible.
-        if (route.length > 0 && !visible.includes(0)) visible.unshift(0);
-        if (route.length > 1 && !visible.includes(route.length - 1)) {
-          visible.push(route.length - 1);
+      }
+      // Always include start and end so the green/red anchors stay visible.
+      if (route.length > 0 && !visible.includes(0)) visible.unshift(0);
+      if (route.length > 1 && !visible.includes(route.length - 1)) {
+        visible.push(route.length - 1);
+      }
+
+      // Hard cap: keep at most MAX_EDIT_MARKERS, sampled evenly along the
+      // visible set (always preserving the first and last entries).
+      const MAX_EDIT_MARKERS = 30;
+      if (visible.length > MAX_EDIT_MARKERS) {
+        const sampled: number[] = [];
+        const lastSlot = MAX_EDIT_MARKERS - 1;
+        for (let s = 0; s < MAX_EDIT_MARKERS; s++) {
+          const sourceIdx = Math.round((s * (visible.length - 1)) / lastSlot);
+          sampled.push(visible[sourceIdx]);
         }
+        indicesToRender = Array.from(new Set(sampled));
+      } else {
         indicesToRender = visible;
       }
     }
