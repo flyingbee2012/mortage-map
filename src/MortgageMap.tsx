@@ -524,11 +524,15 @@ export default function JiuxiangMortgageMapDemo() {
     };
   }, [editMode, mapReady]);
 
-  // Keep the current-position marker in sync.
+  // Keep the current-position marker in sync. While in edit mode we pause
+  // updates so the blue arrow doesn't jump around as you reshape the route.
+  // When you click "Done editing", editMode flips and this effect runs once
+  // with the final route.
   useEffect(() => {
     if (!currentMarkerRef.current) return;
+    if (editMode) return;
     currentMarkerRef.current.setPosition(currentPosition);
-  }, [currentPosition]);
+  }, [currentPosition, route, editMode]);
 
   // Route mutation helpers.
   const moveCheckpoint = (index: number, direction: -1 | 1) => {
@@ -578,7 +582,7 @@ export default function JiuxiangMortgageMapDemo() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 p-6">
-      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
+      <div className="w-full grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
         <section className="rounded-2xl bg-neutral-900 shadow-xl p-5 space-y-5">
           <div>
             <h1 className="text-2xl font-semibold">
