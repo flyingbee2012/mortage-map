@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import defaultRouteJson from "./data/defaultRoute.json";
 
 /**
  * Jiuxiang Mortgage Journey Demo
@@ -19,7 +20,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 const GOOGLE_MAPS_API_KEY: string =
   (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined) ?? "";
 const GOOGLE_MAPS_SCRIPT_ID = "google-maps-js-api";
-const ROUTE_STORAGE_KEY = "mortgageMap.route.v1";
 
 type LatLng = {
   lat: number;
@@ -44,67 +44,7 @@ type TestResult = {
   detail: string;
 };
 
-const DEFAULT_ROUTE: Checkpoint[] = [
-  { name: "Seattle · Departure", lat: 47.6062, lng: -122.3321 },
-  {
-    name: "Vancouver · Near the Canadian border",
-    lat: 49.2827,
-    lng: -123.1207,
-  },
-  { name: "Yukon · Northern wilderness", lat: 60.7212, lng: -135.0568 },
-  { name: "Fairbanks · Alaska", lat: 64.8378, lng: -147.7164 },
-  { name: "Nome · Before the Bering Strait", lat: 64.5011, lng: -165.4064 },
-  { name: "Anadyr · Russian Far East", lat: 64.7337, lng: 177.5089 },
-  { name: "Yakutsk · Siberia", lat: 62.0355, lng: 129.6755 },
-  {
-    name: "Khabarovsk · Heading south through the Far East",
-    lat: 48.4802,
-    lng: 135.0719,
-  },
-  { name: "Harbin · Entering Northeast China", lat: 45.8038, lng: 126.5349 },
-  { name: "Xi'an · Heading southwest", lat: 34.3416, lng: 108.9398 },
-  { name: "Chengdu · Sichuan", lat: 30.5728, lng: 104.0668 },
-  { name: "Jiuxiang · Destination", lat: 29.518, lng: 102.661 },
-];
-
-function isValidCheckpoint(value: unknown): value is Checkpoint {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<Checkpoint>;
-  return (
-    typeof candidate.name === "string" &&
-    typeof candidate.lat === "number" &&
-    typeof candidate.lng === "number" &&
-    Number.isFinite(candidate.lat) &&
-    Number.isFinite(candidate.lng) &&
-    candidate.lat >= -90 &&
-    candidate.lat <= 90 &&
-    candidate.lng >= -180 &&
-    candidate.lng <= 180
-  );
-}
-
-function loadStoredRoute(): Checkpoint[] | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(ROUTE_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
-    if (!parsed.every(isValidCheckpoint)) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function saveStoredRoute(route: Checkpoint[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(ROUTE_STORAGE_KEY, JSON.stringify(route));
-  } catch {
-    // ignore quota / serialization errors
-  }
-}
+const DEFAULT_ROUTE: Checkpoint[] = defaultRouteJson as Checkpoint[];
 
 function isApiKeyConfigured(apiKey: string): boolean {
   return Boolean(
@@ -396,14 +336,7 @@ export default function JiuxiangMortgageMapDemo() {
   const [showTests, setShowTests] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [route, setRoute] = useState<Checkpoint[]>(
-    () => loadStoredRoute() ?? DEFAULT_ROUTE,
-  );
-
-  // Persist route changes to localStorage.
-  useEffect(() => {
-    saveStoredRoute(route);
-  }, [route]);
+  const [route, setRoute] = useState<Checkpoint[]>(DEFAULT_ROUTE);
 
   const routeLatLng = useMemo(
     () => route.map(({ lat, lng }) => ({ lat, lng })),
@@ -630,6 +563,18 @@ export default function JiuxiangMortgageMapDemo() {
     route.forEach((p) => bounds.extend(p));
     mapInstanceRef.current.fitBounds(bounds);
   };
+  const exportRouteJson = () => {
+    const json = JSON.stringify(route, null, 2) + "\n";
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "defaultRoute.json";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 p-6">
@@ -826,6 +771,15 @@ export default function JiuxiangMortgageMapDemo() {
                   disabled={route.length === 0}
                 >
                   Fit map to route
+                </button>
+                <button
+                  className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-700"
+                  type="button"
+                  onClick={exportRouteJson}
+                  disabled={route.length === 0}
+                  title="Download as defaultRoute.json — replace src/data/defaultRoute.json and commit to save."
+                >
+                  Export JSON
                 </button>
                 <button
                   className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-700"

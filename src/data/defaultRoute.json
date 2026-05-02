@@ -1,0 +1,67 @@
+[
+  {
+    "name": "Seattle · Departure",
+    "lat": 47.6062,
+    "lng": -122.3321
+  },
+  {
+    "name": "Vancouver · Near the Canadian border",
+    "lat": 49.2827,
+    "lng": -123.1207
+  },
+  {
+    "name": "Yukon · Northern wilderness",
+    "lat": 60.7212,
+    "lng": -135.0568
+  },
+  {
+    "name": "Fairbanks · Alaska",
+    "lat": 64.8378,
+    "lng": -147.7164
+  },
+  {
+    "name": "Nome · Before the Bering Strait",
+    "lat": 64.5011,
+    "lng": -165.4064
+  },
+  {
+    "name": "Anadyr · Russian Far East",
+    "lat": 64.7337,
+    "lng": 177.5089
+  },
+  {
+    "name": "Yakutsk · Siberia",
+    "lat": 62.0355,
+    "lng": 129.6755
+  },
+  {
+    "name": "Khabarovsk · Heading south through the Far East",
+    "lat": 48.4802,
+    "lng": 135.0719
+  },
+  {
+    "name": "Harbin · Entering Northeast China",
+    "lat": 45.8038,
+    "lng": 126.5349
+  },
+  {
+    "name": "Xi'an · Heading southwest",
+    "lat": 34.3416,
+    "lng": 108.9398
+  },
+  {
+    "name": "Chengdu · Sichuan",
+    "lat": 30.5728,
+    "lng": 104.0668
+  },
+  {
+    "name": "Jiuxiang · Destination",
+    "lat": 29.518,
+    "lng": 102.661
+  },
+  {
+    "name": "Checkpoint 13",
+    "lat": 46.96248055475743,
+    "lng": -122.45205038286974
+  }
+]
