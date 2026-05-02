@@ -393,6 +393,15 @@ function formatCurrency(value: number): string {
   }).format(value || 0);
 }
 
+function formatCurrencyCents(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value || 0);
+}
+
 export default function JiuxiangMortgageMapDemo() {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
@@ -880,16 +889,17 @@ export default function JiuxiangMortgageMapDemo() {
 
           <div className="rounded-2xl bg-neutral-800 p-4 space-y-2 text-sm">
             <p>
-              You have paid off <strong>{formatCurrency(paidPrincipal)}</strong>
+              You have paid off{" "}
+              <strong>{formatCurrencyCents(paidPrincipal)}</strong>
             </p>
             <p>
-              Total distance: <strong>{totalKm.toFixed(0)} km</strong>
+              Total distance: <strong>{totalKm.toFixed(4)} km</strong>
             </p>
             <p>
-              You have traveled <strong>{traveledKm.toFixed(0)} km</strong>
+              You have traveled <strong>{traveledKm.toFixed(4)} km</strong>
             </p>
             <p>
-              Distance remaining: <strong>{remainingKm.toFixed(0)} km</strong>
+              Distance remaining: <strong>{remainingKm.toFixed(4)} km</strong>
             </p>
             <p>
               Current location: <strong>{currentSegment}</strong>
@@ -1051,7 +1061,7 @@ export default function JiuxiangMortgageMapDemo() {
           )}
 
           <p className="text-xs text-neutral-500">
-            Total route length: {totalKm.toFixed(0)} km. Distances use the
+            Total route length: {totalKm.toFixed(4)} km. Distances use the
             great-circle formula between checkpoints; the path is symbolic, not
             a real walkable / drivable route.
           </p>
