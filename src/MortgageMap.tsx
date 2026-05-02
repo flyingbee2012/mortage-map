@@ -719,33 +719,9 @@ export default function JiuxiangMortgageMapDemo() {
     };
   }, [editMode, mapReady]);
 
-  // Map click listener — adds a checkpoint when in edit mode.
-  useEffect(() => {
-    if (!mapReady || !mapInstanceRef.current) return;
-    if (!editMode) return;
-    const map = mapInstanceRef.current;
-
-    const listener = map.addListener(
-      "click",
-      (event: google.maps.MapMouseEvent) => {
-        if (!event.latLng) return;
-        const lat = event.latLng.lat();
-        const lng = event.latLng.lng();
-        setRoute((prev) => [
-          ...prev,
-          {
-            name: `Checkpoint ${prev.length + 1}`,
-            lat,
-            lng,
-          },
-        ]);
-      },
-    );
-
-    return () => {
-      google.maps.event.removeListener(listener);
-    };
-  }, [editMode, mapReady]);
+  // Map click-to-add-checkpoint was removed: it conflicted with selecting a
+  // marker (every miss-click added a stray waypoint). Use the "+" button in
+  // the route list to insert checkpoints between existing ones instead.
 
   // Keep the current-position marker in sync. While in edit mode we pause
   // updates so the blue arrow doesn't jump around as you reshape the route.
@@ -985,8 +961,9 @@ export default function JiuxiangMortgageMapDemo() {
 
             {editMode && (
               <p className="text-xs text-neutral-400 leading-relaxed">
-                Click the map to add a checkpoint. Drag a marker to move it.
-                Right-click a marker to delete it.
+                Use the + buttons below to insert checkpoints between existing
+                ones. Drag a marker to move it. Right-click a marker to delete
+                it.
               </p>
             )}
 
