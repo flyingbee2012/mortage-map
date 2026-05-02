@@ -959,7 +959,7 @@ export default function JiuxiangMortgageMapDemo() {
                           : "hover:bg-neutral-700/40"
                       }`}
                     >
-                      <span className="w-5 text-right text-neutral-500">
+                      <span className="shrink-0 w-10 text-right tabular-nums text-neutral-500">
                         {index + 1}.
                       </span>
                       {editMode ? (
@@ -1038,12 +1038,6 @@ export default function JiuxiangMortgageMapDemo() {
               </div>
             )}
           </div>
-
-          <p className="text-xs text-neutral-500">
-            Total route length: {totalKm.toFixed(4)} km. Distances use the
-            great-circle formula between checkpoints; the path is symbolic, not
-            a real walkable / drivable route.
-          </p>
         </section>
 
         <section className="rounded-2xl overflow-hidden bg-neutral-900 shadow-xl min-h-[680px] relative">
