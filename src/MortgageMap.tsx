@@ -21,6 +21,29 @@ const GOOGLE_MAPS_API_KEY: string =
   (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined) ?? "";
 const GOOGLE_MAPS_SCRIPT_ID = "google-maps-js-api";
 const ROUTE_STORAGE_KEY = "mortgageMap.route.v1";
+const ORIGINAL_PRINCIPAL_STORAGE_KEY = "mortgageMap.originalPrincipal.v1";
+const CURRENT_BALANCE_STORAGE_KEY = "mortgageMap.currentBalance.v1";
+
+function loadStoredNumber(key: string): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (raw === null) return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredNumber(key: string, value: number): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, String(value));
+  } catch {
+    // ignore
+  }
+}
 
 type LatLng = {
   lat: number;
@@ -377,8 +400,12 @@ export default function JiuxiangMortgageMapDemo() {
   const polylineRef = useRef<google.maps.Polyline | null>(null);
   const checkpointMarkersRef = useRef<google.maps.Marker[]>([]);
 
-  const [originalPrincipal, setOriginalPrincipal] = useState(367260.71);
-  const [currentBalance, setCurrentBalance] = useState(367260.71);
+  const [originalPrincipal, setOriginalPrincipal] = useState(
+    () => loadStoredNumber(ORIGINAL_PRINCIPAL_STORAGE_KEY) ?? 367260.71,
+  );
+  const [currentBalance, setCurrentBalance] = useState(
+    () => loadStoredNumber(CURRENT_BALANCE_STORAGE_KEY) ?? 367260.71,
+  );
   const [mapError, setMapError] = useState<string | null>(null);
   const [showTests, setShowTests] = useState(false);
   const [mapReady, setMapReady] = useState(false);
@@ -391,6 +418,14 @@ export default function JiuxiangMortgageMapDemo() {
   useEffect(() => {
     saveStoredRoute(route);
   }, [route]);
+
+  // Persist mortgage inputs to localStorage.
+  useEffect(() => {
+    saveStoredNumber(ORIGINAL_PRINCIPAL_STORAGE_KEY, originalPrincipal);
+  }, [originalPrincipal]);
+  useEffect(() => {
+    saveStoredNumber(CURRENT_BALANCE_STORAGE_KEY, currentBalance);
+  }, [currentBalance]);
 
   const routeLatLng = useMemo(
     () => route.map(({ lat, lng }) => ({ lat, lng })),
@@ -452,6 +487,7 @@ export default function JiuxiangMortgageMapDemo() {
         const polyline = new google.maps.Polyline({
           path: routeLatLng,
           geodesic: true,
+          strokeColor: "#3b82f6",
           strokeOpacity: 0.9,
           strokeWeight: 4,
           map,
