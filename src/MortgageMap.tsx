@@ -377,8 +377,8 @@ export default function JiuxiangMortgageMapDemo() {
   const polylineRef = useRef<google.maps.Polyline | null>(null);
   const checkpointMarkersRef = useRef<google.maps.Marker[]>([]);
 
-  const [originalPrincipal, setOriginalPrincipal] = useState(500000);
-  const [currentBalance, setCurrentBalance] = useState(420000);
+  const [originalPrincipal, setOriginalPrincipal] = useState(367260.71);
+  const [currentBalance, setCurrentBalance] = useState(367260.71);
   const [mapError, setMapError] = useState<string | null>(null);
   const [showTests, setShowTests] = useState(false);
   const [mapReady, setMapReady] = useState(false);
