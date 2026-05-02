@@ -409,6 +409,7 @@ export default function JiuxiangMortgageMapDemo() {
   const [mapError, setMapError] = useState<string | null>(null);
   const [showTests, setShowTests] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+  const [viewportVersion, setViewportVersion] = useState(0);
   const [editMode, setEditMode] = useState(false);
   const [route, setRoute] = useState<Checkpoint[]>(
     () => loadStoredRoute() ?? DEFAULT_ROUTE,
@@ -553,7 +554,9 @@ export default function JiuxiangMortgageMapDemo() {
   // Performance: when NOT in edit mode, we only render the start (green) and
   // end (red) markers — even with thousands of checkpoints, the polyline
   // alone shows the route shape and pan/zoom stays smooth. In edit mode we
-  // render every checkpoint so they can be dragged / right-click-deleted.
+  // render only checkpoints inside the current viewport (plus start + end),
+  // so the number of live Marker objects stays small even for huge routes.
+  // The `viewportVersion` dependency triggers a re-render after pan/zoom.
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
@@ -562,13 +565,33 @@ export default function JiuxiangMortgageMapDemo() {
     checkpointMarkersRef.current.forEach((m) => m.setMap(null));
     checkpointMarkersRef.current = [];
 
-    const indicesToRender = editMode
-      ? route.map((_, i) => i)
-      : route.length === 0
-        ? []
-        : route.length === 1
-          ? [0]
-          : [0, route.length - 1];
+    let indicesToRender: number[];
+    if (!editMode) {
+      indicesToRender =
+        route.length === 0
+          ? []
+          : route.length === 1
+            ? [0]
+            : [0, route.length - 1];
+    } else {
+      const bounds = map.getBounds();
+      if (!bounds) {
+        indicesToRender = route.map((_, i) => i);
+      } else {
+        const visible: number[] = [];
+        route.forEach((cp, i) => {
+          if (bounds.contains({ lat: cp.lat, lng: cp.lng })) {
+            visible.push(i);
+          }
+        });
+        // Always include start and end so the green/red anchors stay visible.
+        if (route.length > 0 && !visible.includes(0)) visible.unshift(0);
+        if (route.length > 1 && !visible.includes(route.length - 1)) {
+          visible.push(route.length - 1);
+        }
+        indicesToRender = visible;
+      }
+    }
 
     indicesToRender.forEach((index) => {
       const checkpoint = route[index];
@@ -607,7 +630,31 @@ export default function JiuxiangMortgageMapDemo() {
 
       checkpointMarkersRef.current.push(marker);
     });
-  }, [route, editMode, mapReady]);
+  }, [route, editMode, mapReady, viewportVersion]);
+
+  // Bump `viewportVersion` (debounced) when the map finishes panning/zooming,
+  // so the marker effect can recompute which checkpoints are visible.
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current) return;
+    if (!editMode) return;
+    const map = mapInstanceRef.current;
+    let timeoutId: number | null = null;
+
+    const listener = map.addListener("idle", () => {
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        setViewportVersion((v) => v + 1);
+      }, 120);
+    });
+
+    // Trigger an initial pass once edit mode begins.
+    setViewportVersion((v) => v + 1);
+
+    return () => {
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      google.maps.event.removeListener(listener);
+    };
+  }, [editMode, mapReady]);
 
   // Map click listener — adds a checkpoint when in edit mode.
   useEffect(() => {
