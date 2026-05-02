@@ -420,11 +420,36 @@ export default function JiuxiangMortgageMapDemo() {
   const [mapReady, setMapReady] = useState(false);
   const [viewportVersion, setViewportVersion] = useState(0);
   const [editMode, setEditMode] = useState(false);
+  const [selectedCheckpointIndex, setSelectedCheckpointIndex] = useState<
+    number | null
+  >(null);
   const [route, setRoute] = useState<Checkpoint[]>(
     () => loadStoredRoute() ?? DEFAULT_ROUTE,
   );
   // Snapshot of the route taken when edit mode begins, so Cancel can revert.
   const editSnapshotRef = useRef<Checkpoint[] | null>(null);
+  // Ref to the currently selected list item, so we can scroll it into view
+  // when the user clicks its marker on the map.
+  const selectedListItemRef = useRef<HTMLLIElement | null>(null);
+
+  // Clear selection if the route shrinks past the selected index.
+  useEffect(() => {
+    if (
+      selectedCheckpointIndex !== null &&
+      selectedCheckpointIndex >= route.length
+    ) {
+      setSelectedCheckpointIndex(null);
+    }
+  }, [route.length, selectedCheckpointIndex]);
+
+  // Scroll the selected list item into view when selection changes.
+  useEffect(() => {
+    if (selectedCheckpointIndex === null) return;
+    selectedListItemRef.current?.scrollIntoView({
+      block: "nearest",
+      behavior: "smooth",
+    });
+  }, [selectedCheckpointIndex]);
 
   // Persist route changes to localStorage — but only when NOT editing,
   // so edits stay tentative until the user clicks Done.
@@ -650,6 +675,10 @@ export default function JiuxiangMortgageMapDemo() {
           setRoute((prev) => prev.filter((_, i) => i !== index));
         });
       }
+
+      marker.addListener("click", () => {
+        setSelectedCheckpointIndex(index);
+      });
 
       checkpointMarkersRef.current.push(marker);
     });
@@ -957,54 +986,66 @@ export default function JiuxiangMortgageMapDemo() {
               </p>
             ) : (
               <ol className="space-y-1 max-h-64 overflow-y-auto pr-1">
-                {route.map((checkpoint, index) => (
-                  <li key={index} className="flex items-center gap-1 text-xs">
-                    <span className="w-5 text-right text-neutral-500">
-                      {index + 1}.
-                    </span>
-                    {editMode ? (
-                      <input
-                        className="flex-1 min-w-0 rounded bg-neutral-900 border border-neutral-700 px-2 py-1 outline-none"
-                        value={checkpoint.name}
-                        onChange={(e) =>
-                          renameCheckpoint(index, e.target.value)
-                        }
-                      />
-                    ) : (
-                      <span
-                        className="flex-1 min-w-0 truncate text-neutral-200"
-                        title={`${checkpoint.name} (${checkpoint.lat.toFixed(3)}, ${checkpoint.lng.toFixed(3)})`}
-                      >
-                        {checkpoint.name}
+                {route.map((checkpoint, index) => {
+                  const isSelected = selectedCheckpointIndex === index;
+                  return (
+                    <li
+                      key={index}
+                      ref={isSelected ? selectedListItemRef : undefined}
+                      onClick={() => setSelectedCheckpointIndex(index)}
+                      className={`flex items-center gap-1 text-xs rounded px-1 py-0.5 cursor-pointer transition ${
+                        isSelected
+                          ? "bg-amber-500/20 ring-1 ring-amber-400/60"
+                          : "hover:bg-neutral-700/40"
+                      }`}
+                    >
+                      <span className="w-5 text-right text-neutral-500">
+                        {index + 1}.
                       </span>
-                    )}
-                    {editMode && (
-                      <>
-                        <button
-                          className="rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-30"
-                          type="button"
-                          disabled={index === 0}
-                          onClick={() => insertCheckpointAt(index)}
-                          title={
-                            index === 0
-                              ? "Cannot insert before the first checkpoint"
-                              : `Insert a new checkpoint between ${route[index - 1].name} and ${checkpoint.name}`
+                      {editMode ? (
+                        <input
+                          className="flex-1 min-w-0 rounded bg-neutral-900 border border-neutral-700 px-2 py-1 outline-none"
+                          value={checkpoint.name}
+                          onChange={(e) =>
+                            renameCheckpoint(index, e.target.value)
                           }
+                        />
+                      ) : (
+                        <span
+                          className="flex-1 min-w-0 truncate text-neutral-200"
+                          title={`${checkpoint.name} (${checkpoint.lat.toFixed(3)}, ${checkpoint.lng.toFixed(3)})`}
                         >
-                          +
-                        </button>
-                        <button
-                          className="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-red-200 hover:bg-red-500/20"
-                          type="button"
-                          onClick={() => deleteCheckpoint(index)}
-                          title="Delete"
-                        >
-                          ✕
-                        </button>
-                      </>
-                    )}
-                  </li>
-                ))}
+                          {checkpoint.name}
+                        </span>
+                      )}
+                      {editMode && (
+                        <>
+                          <button
+                            className="rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-30"
+                            type="button"
+                            disabled={index === 0}
+                            onClick={() => insertCheckpointAt(index)}
+                            title={
+                              index === 0
+                                ? "Cannot insert before the first checkpoint"
+                                : `Insert a new checkpoint between ${route[index - 1].name} and ${checkpoint.name}`
+                            }
+                          >
+                            +
+                          </button>
+                          <button
+                            className="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-red-200 hover:bg-red-500/20"
+                            type="button"
+                            onClick={() => deleteCheckpoint(index)}
+                            title="Delete"
+                          >
+                            ✕
+                          </button>
+                        </>
+                      )}
+                    </li>
+                  );
+                })}
               </ol>
             )}
 
