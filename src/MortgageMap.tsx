@@ -718,15 +718,6 @@ export default function JiuxiangMortgageMapDemo() {
   }, [currentPosition, route, editMode]);
 
   // Route mutation helpers.
-  const moveCheckpoint = (index: number, direction: -1 | 1) => {
-    setRoute((prev) => {
-      const target = index + direction;
-      if (target < 0 || target >= prev.length) return prev;
-      const next = [...prev];
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
-  };
   const renameCheckpoint = (index: number, name: string) => {
     setRoute((prev) =>
       prev.map((cp, i) => (i === index ? { ...cp, name } : cp)),
@@ -973,24 +964,6 @@ export default function JiuxiangMortgageMapDemo() {
                     )}
                     {editMode && (
                       <>
-                        <button
-                          className="rounded border border-neutral-700 bg-neutral-900 px-1.5 py-0.5 text-neutral-300 hover:bg-neutral-700 disabled:opacity-30"
-                          type="button"
-                          disabled={index === 0}
-                          onClick={() => moveCheckpoint(index, -1)}
-                          title="Move up"
-                        >
-                          ↑
-                        </button>
-                        <button
-                          className="rounded border border-neutral-700 bg-neutral-900 px-1.5 py-0.5 text-neutral-300 hover:bg-neutral-700 disabled:opacity-30"
-                          type="button"
-                          disabled={index === route.length - 1}
-                          onClick={() => moveCheckpoint(index, 1)}
-                          title="Move down"
-                        >
-                          ↓
-                        </button>
                         <button
                           className="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-red-200 hover:bg-red-500/20"
                           type="button"
