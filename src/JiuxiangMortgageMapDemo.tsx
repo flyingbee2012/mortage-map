@@ -1,0 +1,619 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+
+/**
+ * Jiuxiang Mortgage Journey Demo
+ *
+ * Setup:
+ * 1) Create a Google Maps JavaScript API key.
+ * 2) Enable "Maps JavaScript API" in Google Cloud Console.
+ * 3) Make sure billing is enabled for the Google Cloud project.
+ * 4) If the key is restricted, allow your dev origin, e.g. http://localhost:5173/*
+ * 5) Put the key in .env.local as VITE_GOOGLE_MAPS_API_KEY=your_key_here
+ *
+ * Notes:
+ * - This MVP uses satellite map only.
+ * - Street View is intentionally not included yet.
+ * - The route points are approximate / symbolic, not a legal or walkable route.
+ */
+
+const GOOGLE_MAPS_API_KEY: string =
+  (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined) ?? "";
+const GOOGLE_MAPS_SCRIPT_ID = "google-maps-js-api";
+
+type LatLng = {
+  lat: number;
+  lng: number;
+};
+
+type Checkpoint = LatLng & {
+  name: string;
+};
+
+type RouteSegment = {
+  start: LatLng;
+  end: LatLng;
+  km: number;
+  startKm: number;
+  endKm: number;
+};
+
+type TestResult = {
+  name: string;
+  passed: boolean;
+  detail: string;
+};
+
+const ROUTE: Checkpoint[] = [
+  { name: "Seattle · Departure", lat: 47.6062, lng: -122.3321 },
+  {
+    name: "Vancouver · Near the Canadian border",
+    lat: 49.2827,
+    lng: -123.1207,
+  },
+  { name: "Yukon · Northern wilderness", lat: 60.7212, lng: -135.0568 },
+  { name: "Fairbanks · Alaska", lat: 64.8378, lng: -147.7164 },
+  { name: "Nome · Before the Bering Strait", lat: 64.5011, lng: -165.4064 },
+  { name: "Anadyr · Russian Far East", lat: 64.7337, lng: 177.5089 },
+  { name: "Yakutsk · Siberia", lat: 62.0355, lng: 129.6755 },
+  {
+    name: "Khabarovsk · Heading south through the Far East",
+    lat: 48.4802,
+    lng: 135.0719,
+  },
+  { name: "Harbin · Entering Northeast China", lat: 45.8038, lng: 126.5349 },
+  { name: "Xi'an · Heading southwest", lat: 34.3416, lng: 108.9398 },
+  { name: "Chengdu · Sichuan", lat: 30.5728, lng: 104.0668 },
+  { name: "Jiuxiang · Destination", lat: 29.518, lng: 102.661 },
+];
+
+function isApiKeyConfigured(apiKey: string): boolean {
+  return Boolean(
+    apiKey && apiKey.trim() && apiKey !== "YOUR_GOOGLE_MAPS_API_KEY",
+  );
+}
+
+function buildMapsScriptUrl(apiKey: string): string {
+  const url = new URL("https://maps.googleapis.com/maps/api/js");
+  url.searchParams.set("key", apiKey);
+  url.searchParams.set("v", "weekly");
+  return url.toString();
+}
+
+function loadGoogleMaps(apiKey: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!isApiKeyConfigured(apiKey)) {
+      reject(
+        new Error(
+          "Missing Google Maps API key. Set VITE_GOOGLE_MAPS_API_KEY in .env.local",
+        ),
+      );
+      return;
+    }
+
+    if (window.google?.maps) {
+      resolve();
+      return;
+    }
+
+    const previousAuthFailure = window.gm_authFailure;
+    window.gm_authFailure = () => {
+      previousAuthFailure?.();
+      reject(
+        new Error(
+          "Google Maps rejected this API key. Check that the key is valid, Maps JavaScript API is enabled, billing is enabled, and HTTP referrer restrictions include this site.",
+        ),
+      );
+    };
+
+    const existingScript = document.getElementById(
+      GOOGLE_MAPS_SCRIPT_ID,
+    ) as HTMLScriptElement | null;
+
+    if (existingScript) {
+      existingScript.addEventListener("load", () => {
+        if (window.google?.maps) resolve();
+        else
+          reject(
+            new Error(
+              "Google Maps script loaded, but window.google.maps is unavailable.",
+            ),
+          );
+      });
+      existingScript.addEventListener("error", () => {
+        reject(new Error("Failed to load the Google Maps JavaScript file."));
+      });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = GOOGLE_MAPS_SCRIPT_ID;
+    script.src = buildMapsScriptUrl(apiKey);
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      if (window.google?.maps) resolve();
+      else
+        reject(
+          new Error(
+            "Google Maps script loaded, but window.google.maps is unavailable.",
+          ),
+        );
+    };
+    script.onerror = () => {
+      reject(new Error("Failed to load the Google Maps JavaScript file."));
+    };
+    document.head.appendChild(script);
+  });
+}
+
+function toRadians(degrees: number): number {
+  return (degrees * Math.PI) / 180;
+}
+
+function toDegrees(radians: number): number {
+  return (radians * 180) / Math.PI;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(value, max));
+}
+
+function distanceKm(a: LatLng, b: LatLng): number {
+  const earthRadiusKm = 6371;
+  const dLat = toRadians(b.lat - a.lat);
+  const dLng = toRadians(b.lng - a.lng);
+  const lat1 = toRadians(a.lat);
+  const lat2 = toRadians(b.lat);
+
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+
+  return 2 * earthRadiusKm * Math.asin(Math.sqrt(h));
+}
+
+function interpolateGreatCircle(
+  a: LatLng,
+  b: LatLng,
+  fraction: number,
+): LatLng {
+  const safeFraction = clamp(fraction, 0, 1);
+  const lat1 = toRadians(a.lat);
+  const lng1 = toRadians(a.lng);
+  const lat2 = toRadians(b.lat);
+  const lng2 = toRadians(b.lng);
+
+  const d =
+    2 *
+    Math.asin(
+      Math.sqrt(
+        Math.sin((lat2 - lat1) / 2) ** 2 +
+          Math.cos(lat1) * Math.cos(lat2) * Math.sin((lng2 - lng1) / 2) ** 2,
+      ),
+    );
+
+  if (d === 0) return a;
+
+  const A = Math.sin((1 - safeFraction) * d) / Math.sin(d);
+  const B = Math.sin(safeFraction * d) / Math.sin(d);
+
+  const x =
+    A * Math.cos(lat1) * Math.cos(lng1) + B * Math.cos(lat2) * Math.cos(lng2);
+  const y =
+    A * Math.cos(lat1) * Math.sin(lng1) + B * Math.cos(lat2) * Math.sin(lng2);
+  const z = A * Math.sin(lat1) + B * Math.sin(lat2);
+
+  const lat = Math.atan2(z, Math.sqrt(x * x + y * y));
+  const lng = Math.atan2(y, x);
+
+  return { lat: toDegrees(lat), lng: toDegrees(lng) };
+}
+
+function getRouteSegments(route: LatLng[]): {
+  segments: RouteSegment[];
+  totalKm: number;
+} {
+  let totalKm = 0;
+  const segments: RouteSegment[] = [];
+
+  for (let i = 0; i < route.length - 1; i++) {
+    const km = distanceKm(route[i], route[i + 1]);
+    segments.push({
+      start: route[i],
+      end: route[i + 1],
+      km,
+      startKm: totalKm,
+      endKm: totalKm + km,
+    });
+    totalKm += km;
+  }
+
+  return { segments, totalKm };
+}
+
+function getPointAlongRoute(
+  route: LatLng[],
+  distanceFromStartKm: number,
+): LatLng {
+  const { segments, totalKm } = getRouteSegments(route);
+
+  if (route.length === 0) return { lat: 0, lng: 0 };
+  if (route.length === 1 || segments.length === 0) return route[0];
+
+  const targetKm = clamp(distanceFromStartKm, 0, totalKm);
+  const segment =
+    segments.find((s) => targetKm >= s.startKm && targetKm <= s.endKm) ??
+    segments[segments.length - 1];
+  const fraction =
+    segment.km === 0 ? 0 : (targetKm - segment.startKm) / segment.km;
+
+  return interpolateGreatCircle(segment.start, segment.end, fraction);
+}
+
+function getCurrentCheckpoint(
+  route: Checkpoint[],
+  distanceFromStartKm: number,
+): string {
+  const { segments, totalKm } = getRouteSegments(route);
+
+  if (route.length === 0) return "Unknown";
+  if (route.length === 1 || segments.length === 0) return route[0].name;
+
+  const targetKm = clamp(distanceFromStartKm, 0, totalKm);
+  if (targetKm >= totalKm) return route[route.length - 1].name;
+
+  const segmentIndex = segments.findIndex(
+    (s) => targetKm >= s.startKm && targetKm <= s.endKm,
+  );
+
+  if (segmentIndex < 0) return route[route.length - 1].name;
+  return `${route[segmentIndex].name} → ${route[segmentIndex + 1].name}`;
+}
+
+function runSmokeTests(route: Checkpoint[]): TestResult[] {
+  const routeLatLng = route.map(({ lat, lng }) => ({ lat, lng }));
+  const { totalKm } = getRouteSegments(routeLatLng);
+  const start = getPointAlongRoute(routeLatLng, 0);
+  const end = getPointAlongRoute(routeLatLng, totalKm);
+  const overEnd = getPointAlongRoute(routeLatLng, totalKm + 10000);
+  const underStart = getPointAlongRoute(routeLatLng, -10000);
+  const midpoint = getPointAlongRoute(routeLatLng, totalKm / 2);
+  const sampleProgress = 0.16;
+  const sampleTraveledKm = sampleProgress * totalKm;
+
+  return [
+    {
+      name: "Route has a positive total distance",
+      passed: totalKm > 1000,
+      detail: `totalKm=${totalKm.toFixed(0)}`,
+    },
+    {
+      name: "Distance 0 returns Seattle",
+      passed:
+        Math.abs(start.lat - route[0].lat) < 0.0001 &&
+        Math.abs(start.lng - route[0].lng) < 0.0001,
+      detail: `lat=${start.lat.toFixed(4)}, lng=${start.lng.toFixed(4)}`,
+    },
+    {
+      name: "Total distance returns Jiuxiang",
+      passed:
+        Math.abs(end.lat - route[route.length - 1].lat) < 0.0001 &&
+        Math.abs(end.lng - route[route.length - 1].lng) < 0.0001,
+      detail: `lat=${end.lat.toFixed(4)}, lng=${end.lng.toFixed(4)}`,
+    },
+    {
+      name: "Negative distance clamps to start",
+      passed:
+        Math.abs(underStart.lat - route[0].lat) < 0.0001 &&
+        Math.abs(underStart.lng - route[0].lng) < 0.0001,
+      detail: `lat=${underStart.lat.toFixed(4)}, lng=${underStart.lng.toFixed(4)}`,
+    },
+    {
+      name: "Overpaid distance clamps to end",
+      passed:
+        Math.abs(overEnd.lat - route[route.length - 1].lat) < 0.0001 &&
+        Math.abs(overEnd.lng - route[route.length - 1].lng) < 0.0001,
+      detail: `lat=${overEnd.lat.toFixed(4)}, lng=${overEnd.lng.toFixed(4)}`,
+    },
+    {
+      name: "Midpoint is a valid coordinate",
+      passed:
+        Number.isFinite(midpoint.lat) &&
+        Number.isFinite(midpoint.lng) &&
+        midpoint.lat >= -90 &&
+        midpoint.lat <= 90 &&
+        midpoint.lng >= -180 &&
+        midpoint.lng <= 180,
+      detail: `lat=${midpoint.lat.toFixed(4)}, lng=${midpoint.lng.toFixed(4)}`,
+    },
+    {
+      name: "Progress math maps 16% payoff to 16% of route",
+      passed: Math.abs(sampleTraveledKm / totalKm - sampleProgress) < 0.000001,
+      detail: `16% = ${sampleTraveledKm.toFixed(0)} km`,
+    },
+  ];
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+}
+
+export default function JiuxiangMortgageMapDemo() {
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<google.maps.Map | null>(null);
+  const markerRef = useRef<google.maps.Marker | null>(null);
+  const polylineRef = useRef<google.maps.Polyline | null>(null);
+
+  const [originalPrincipal, setOriginalPrincipal] = useState(500000);
+  const [currentBalance, setCurrentBalance] = useState(420000);
+  const [extraPayment, setExtraPayment] = useState(1000);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [showTests, setShowTests] = useState(false);
+
+  const routeLatLng = useMemo(
+    () => ROUTE.map(({ lat, lng }) => ({ lat, lng })),
+    [],
+  );
+  const { totalKm } = useMemo(
+    () => getRouteSegments(routeLatLng),
+    [routeLatLng],
+  );
+  const smokeTests = useMemo(() => runSmokeTests(ROUTE), []);
+
+  const safeOriginalPrincipal = Math.max(0, originalPrincipal || 0);
+  const safeCurrentBalance = Math.max(0, currentBalance || 0);
+  const paidPrincipal = clamp(
+    safeOriginalPrincipal - safeCurrentBalance,
+    0,
+    safeOriginalPrincipal,
+  );
+  const progress =
+    safeOriginalPrincipal > 0 ? paidPrincipal / safeOriginalPrincipal : 0;
+  const traveledKm = progress * totalKm;
+  const remainingKm = Math.max(0, totalKm - traveledKm);
+  const currentPosition = useMemo(
+    () => getPointAlongRoute(routeLatLng, traveledKm),
+    [routeLatLng, traveledKm],
+  );
+  const extraPaymentKm =
+    safeOriginalPrincipal > 0
+      ? (Math.max(0, extraPayment || 0) / safeOriginalPrincipal) * totalKm
+      : 0;
+  const currentSegment = getCurrentCheckpoint(ROUTE, traveledKm);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function initMap() {
+      try {
+        await loadGoogleMaps(GOOGLE_MAPS_API_KEY);
+
+        if (cancelled || !mapRef.current || mapInstanceRef.current) return;
+
+        const map = new google.maps.Map(mapRef.current, {
+          center: ROUTE[0],
+          zoom: 3,
+          mapTypeId: google.maps.MapTypeId.SATELLITE,
+          fullscreenControl: true,
+          streetViewControl: false,
+          mapTypeControl: true,
+        });
+
+        const bounds = new google.maps.LatLngBounds();
+        routeLatLng.forEach((point) => bounds.extend(point));
+        map.fitBounds(bounds);
+
+        const polyline = new google.maps.Polyline({
+          path: routeLatLng,
+          geodesic: true,
+          strokeOpacity: 0.9,
+          strokeWeight: 4,
+          map,
+        });
+
+        const marker = new google.maps.Marker({
+          position: currentPosition,
+          map,
+          title: "Your current position",
+        });
+
+        mapInstanceRef.current = map;
+        polylineRef.current = polyline;
+        markerRef.current = marker;
+        setMapError(null);
+      } catch (error) {
+        if (cancelled) return;
+        setMapError(
+          error instanceof Error
+            ? error.message
+            : "Google Maps failed to load.",
+        );
+      }
+    }
+
+    initMap();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPosition, routeLatLng]);
+
+  useEffect(() => {
+    if (!markerRef.current) return;
+    markerRef.current.setPosition(currentPosition);
+  }, [currentPosition]);
+
+  return (
+    <div className="min-h-screen bg-neutral-950 text-neutral-100 p-6">
+      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
+        <section className="rounded-2xl bg-neutral-900 shadow-xl p-5 space-y-5">
+          <div>
+            <h1 className="text-2xl font-semibold">Walking to Jiuxiang</h1>
+            <p className="text-sm text-neutral-400 mt-2">
+              Turn your mortgage balance into a road from Seattle to Jiuxiang.
+              Every bit of principal you pay off brings you closer to the
+              destination.
+            </p>
+          </div>
+
+          {!isApiKeyConfigured(GOOGLE_MAPS_API_KEY) && (
+            <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100 space-y-2">
+              <p className="font-semibold">
+                Google Maps API key is not configured.
+              </p>
+              <p>
+                Create a{" "}
+                <code className="rounded bg-black/30 px-1">.env.local</code>{" "}
+                file in the project root and add:
+                <br />
+                <code className="rounded bg-black/30 px-1">
+                  VITE_GOOGLE_MAPS_API_KEY=your_key_here
+                </code>
+              </p>
+            </div>
+          )}
+
+          <label className="block space-y-2">
+            <span className="text-sm text-neutral-300">Original principal</span>
+            <input
+              className="w-full rounded-xl bg-neutral-800 border border-neutral-700 px-3 py-2 outline-none"
+              min={0}
+              type="number"
+              value={originalPrincipal}
+              onChange={(e) => setOriginalPrincipal(Number(e.target.value))}
+            />
+          </label>
+
+          <label className="block space-y-2">
+            <span className="text-sm text-neutral-300">Current balance</span>
+            <input
+              className="w-full rounded-xl bg-neutral-800 border border-neutral-700 px-3 py-2 outline-none"
+              min={0}
+              type="number"
+              value={currentBalance}
+              onChange={(e) => setCurrentBalance(Number(e.target.value))}
+            />
+          </label>
+
+          <label className="block space-y-2">
+            <span className="text-sm text-neutral-300">
+              Extra payment preview
+            </span>
+            <input
+              className="w-full rounded-xl bg-neutral-800 border border-neutral-700 px-3 py-2 outline-none"
+              min={0}
+              type="number"
+              value={extraPayment}
+              onChange={(e) => setExtraPayment(Number(e.target.value))}
+            />
+          </label>
+
+          <div className="space-y-3 pt-2">
+            <div className="h-3 rounded-full bg-neutral-800 overflow-hidden">
+              <div
+                className="h-full bg-white"
+                style={{ width: `${progress * 100}%` }}
+              />
+            </div>
+            <div className="text-sm text-neutral-300">
+              Progress: {(progress * 100).toFixed(2)}%
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-neutral-800 p-4 space-y-2 text-sm">
+            <p>
+              You have paid off <strong>{formatCurrency(paidPrincipal)}</strong>
+            </p>
+            <p>
+              You have traveled <strong>{traveledKm.toFixed(0)} km</strong>
+            </p>
+            <p>
+              Distance remaining to Jiuxiang:{" "}
+              <strong>{remainingKm.toFixed(0)} km</strong>
+            </p>
+            <p>
+              Current location: <strong>{currentSegment}</strong>
+            </p>
+            <p className="text-neutral-300">
+              This extra payment would move you about{" "}
+              <strong>{extraPaymentKm.toFixed(1)} km</strong> closer to Jiuxiang
+            </p>
+          </div>
+
+          <button
+            className="w-full rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-3 py-2 text-sm transition"
+            type="button"
+            onClick={() => setShowTests((value) => !value)}
+          >
+            {showTests ? "Hide" : "Show"} smoke tests
+          </button>
+
+          {showTests && (
+            <div className="rounded-2xl bg-neutral-800 p-4 text-xs space-y-2">
+              {smokeTests.map((test) => (
+                <div key={test.name} className="flex items-start gap-2">
+                  <span>{test.passed ? "✅" : "❌"}</span>
+                  <div>
+                    <div className="font-medium text-neutral-200">
+                      {test.name}
+                    </div>
+                    <div className="text-neutral-400">{test.detail}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="text-xs text-neutral-500">
+            Route length in this demo: {totalKm.toFixed(0)} km. The route is a
+            symbolic approximation and does not represent a real walkable path.
+          </p>
+        </section>
+
+        <section className="rounded-2xl overflow-hidden bg-neutral-900 shadow-xl min-h-[680px] relative">
+          <div ref={mapRef} className="absolute inset-0" />
+          {mapError && (
+            <div className="absolute inset-0 flex items-center justify-center bg-neutral-950/95 p-6">
+              <div className="max-w-lg rounded-2xl border border-red-400/40 bg-red-500/10 p-5 text-red-100 space-y-3">
+                <h2 className="text-lg font-semibold">
+                  Google Maps failed to load
+                </h2>
+                <p className="text-sm">{mapError}</p>
+                <div className="text-sm text-red-100/80 space-y-1">
+                  <p>Common causes:</p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li>
+                      The API key is wrong, or the dev server was not restarted
+                      after editing .env.local.
+                    </li>
+                    <li>Maps JavaScript API is not enabled in Google Cloud.</li>
+                    <li>Billing is not enabled for the project.</li>
+                    <li>
+                      The API key's HTTP referrer restriction does not include
+                      the current localhost or deployed domain.
+                    </li>
+                  </ul>
+                </div>
+                <p className="text-xs text-red-100/70">
+                  A map load failure does not affect the loan progress and route
+                  algorithm tests on the left.
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+declare global {
+  interface Window {
+    google?: typeof google;
+    gm_authFailure?: () => void;
+  }
+}
