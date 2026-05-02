@@ -379,7 +379,6 @@ export default function JiuxiangMortgageMapDemo() {
 
   const [originalPrincipal, setOriginalPrincipal] = useState(500000);
   const [currentBalance, setCurrentBalance] = useState(420000);
-  const [extraPayment, setExtraPayment] = useState(1000);
   const [mapError, setMapError] = useState<string | null>(null);
   const [showTests, setShowTests] = useState(false);
   const [mapReady, setMapReady] = useState(false);
@@ -418,10 +417,6 @@ export default function JiuxiangMortgageMapDemo() {
     () => getPointAlongRoute(routeLatLng, traveledKm),
     [routeLatLng, traveledKm],
   );
-  const extraPaymentKm =
-    safeOriginalPrincipal > 0
-      ? (Math.max(0, extraPayment || 0) / safeOriginalPrincipal) * totalKm
-      : 0;
   const currentSegment = getCurrentCheckpoint(route, traveledKm);
   const destinationName =
     route.length > 0 ? route[route.length - 1].name : "destination";
@@ -675,26 +670,70 @@ export default function JiuxiangMortgageMapDemo() {
 
           <label className="block space-y-2">
             <span className="text-sm text-neutral-300">Current balance</span>
-            <input
-              className="w-full rounded-xl bg-neutral-800 border border-neutral-700 px-3 py-2 outline-none"
-              min={0}
-              type="number"
-              value={currentBalance}
-              onChange={(e) => setCurrentBalance(Number(e.target.value))}
-            />
-          </label>
-
-          <label className="block space-y-2">
-            <span className="text-sm text-neutral-300">
-              Extra payment preview
-            </span>
-            <input
-              className="w-full rounded-xl bg-neutral-800 border border-neutral-700 px-3 py-2 outline-none"
-              min={0}
-              type="number"
-              value={extraPayment}
-              onChange={(e) => setExtraPayment(Number(e.target.value))}
-            />
+            <div className="flex items-stretch gap-2">
+              <input
+                className="flex-1 min-w-0 rounded-xl bg-neutral-800 border border-neutral-700 px-3 py-2 outline-none"
+                min={0}
+                step={0.01}
+                type="number"
+                value={currentBalance}
+                onChange={(e) => setCurrentBalance(Number(e.target.value))}
+              />
+              <div
+                className="flex flex-col rounded-lg overflow-hidden border border-neutral-700"
+                title="Step by $1"
+              >
+                <button
+                  type="button"
+                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
+                  onClick={() =>
+                    setCurrentBalance((v) =>
+                      Math.max(0, Math.round(((v || 0) + 1) * 100) / 100),
+                    )
+                  }
+                >
+                  +$1
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700"
+                  onClick={() =>
+                    setCurrentBalance((v) =>
+                      Math.max(0, Math.round(((v || 0) - 1) * 100) / 100),
+                    )
+                  }
+                >
+                  −$1
+                </button>
+              </div>
+              <div
+                className="flex flex-col rounded-lg overflow-hidden border border-neutral-700"
+                title="Step by 1¢"
+              >
+                <button
+                  type="button"
+                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
+                  onClick={() =>
+                    setCurrentBalance((v) =>
+                      Math.max(0, Math.round(((v || 0) + 0.01) * 100) / 100),
+                    )
+                  }
+                >
+                  +1¢
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700"
+                  onClick={() =>
+                    setCurrentBalance((v) =>
+                      Math.max(0, Math.round(((v || 0) - 0.01) * 100) / 100),
+                    )
+                  }
+                >
+                  −1¢
+                </button>
+              </div>
+            </div>
           </label>
 
           <div className="space-y-3 pt-2">
@@ -714,6 +753,9 @@ export default function JiuxiangMortgageMapDemo() {
               You have paid off <strong>{formatCurrency(paidPrincipal)}</strong>
             </p>
             <p>
+              Total distance: <strong>{totalKm.toFixed(0)} km</strong>
+            </p>
+            <p>
               You have traveled <strong>{traveledKm.toFixed(0)} km</strong>
             </p>
             <p>
@@ -721,10 +763,6 @@ export default function JiuxiangMortgageMapDemo() {
             </p>
             <p>
               Current location: <strong>{currentSegment}</strong>
-            </p>
-            <p className="text-neutral-300">
-              This extra payment would move you about{" "}
-              <strong>{extraPaymentKm.toFixed(1)} km</strong> closer
             </p>
           </div>
 
