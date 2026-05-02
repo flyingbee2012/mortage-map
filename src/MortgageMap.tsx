@@ -20,6 +20,7 @@ import defaultRouteJson from "./data/defaultRoute.json";
 const GOOGLE_MAPS_API_KEY: string =
   (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined) ?? "";
 const GOOGLE_MAPS_SCRIPT_ID = "google-maps-js-api";
+const ROUTE_STORAGE_KEY = "mortgageMap.route.v1";
 
 type LatLng = {
   lat: number;
@@ -45,6 +46,53 @@ type TestResult = {
 };
 
 const DEFAULT_ROUTE: Checkpoint[] = defaultRouteJson as Checkpoint[];
+
+function isValidCheckpoint(value: unknown): value is Checkpoint {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<Checkpoint>;
+  return (
+    typeof candidate.name === "string" &&
+    typeof candidate.lat === "number" &&
+    typeof candidate.lng === "number" &&
+    Number.isFinite(candidate.lat) &&
+    Number.isFinite(candidate.lng) &&
+    candidate.lat >= -90 &&
+    candidate.lat <= 90 &&
+    candidate.lng >= -180 &&
+    candidate.lng <= 180
+  );
+}
+
+function loadStoredRoute(): Checkpoint[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(ROUTE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || !parsed.every(isValidCheckpoint)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredRoute(route: Checkpoint[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ROUTE_STORAGE_KEY, JSON.stringify(route));
+  } catch {
+    // ignore quota / serialization errors
+  }
+}
+
+function clearStoredRoute(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(ROUTE_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 function isApiKeyConfigured(apiKey: string): boolean {
   return Boolean(
@@ -336,7 +384,14 @@ export default function JiuxiangMortgageMapDemo() {
   const [showTests, setShowTests] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [route, setRoute] = useState<Checkpoint[]>(DEFAULT_ROUTE);
+  const [route, setRoute] = useState<Checkpoint[]>(
+    () => loadStoredRoute() ?? DEFAULT_ROUTE,
+  );
+
+  // Persist route changes to localStorage.
+  useEffect(() => {
+    saveStoredRoute(route);
+  }, [route]);
 
   const routeLatLng = useMemo(
     () => route.map(({ lat, lng }) => ({ lat, lng })),
@@ -555,9 +610,10 @@ export default function JiuxiangMortgageMapDemo() {
   const resetRoute = () => {
     if (
       window.confirm(
-        "Reset to the default Seattle \u2192 Jiuxiang route? Your current edits will be lost.",
+        "Reset to the default route from defaultRoute.json? Your current edits will be lost.",
       )
     ) {
+      clearStoredRoute();
       setRoute(DEFAULT_ROUTE);
     }
   };
