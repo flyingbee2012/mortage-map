@@ -501,7 +501,7 @@ export default function JiuxiangMortgageMapDemo() {
         const map = new google.maps.Map(mapRef.current, {
           center: initialCenter,
           zoom: 3,
-          mapTypeId: google.maps.MapTypeId.SATELLITE,
+          mapTypeId: google.maps.MapTypeId.HYBRID,
           fullscreenControl: true,
           streetViewControl: false,
           mapTypeControl: true,
