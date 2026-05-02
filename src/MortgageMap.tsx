@@ -619,10 +619,18 @@ export default function JiuxiangMortgageMapDemo() {
           }
         });
       }
-      // Always include start and end so the green/red anchors stay visible.
+      // Always include start, end, and selected so they stay visible.
       if (route.length > 0 && !visible.includes(0)) visible.unshift(0);
       if (route.length > 1 && !visible.includes(route.length - 1)) {
         visible.push(route.length - 1);
+      }
+      if (
+        selectedCheckpointIndex !== null &&
+        selectedCheckpointIndex >= 0 &&
+        selectedCheckpointIndex < route.length &&
+        !visible.includes(selectedCheckpointIndex)
+      ) {
+        visible.push(selectedCheckpointIndex);
       }
 
       // Hard cap: keep at most MAX_EDIT_MARKERS, sampled evenly along the
@@ -645,18 +653,21 @@ export default function JiuxiangMortgageMapDemo() {
       const checkpoint = route[index];
       const isStart = index === 0;
       const isEnd = index === route.length - 1;
+      const isSelected = selectedCheckpointIndex === index;
+      const baseFill = isStart ? "#22c55e" : isEnd ? "#ef4444" : "#fbbf24";
       const marker = new google.maps.Marker({
         position: { lat: checkpoint.lat, lng: checkpoint.lng },
         map,
         title: `${index + 1}. ${checkpoint.name}`,
         draggable: editMode,
+        zIndex: isSelected ? 9998 : undefined,
         icon: {
           path: google.maps.SymbolPath.CIRCLE,
-          scale: editMode ? 5 : 4,
-          fillColor: isStart ? "#22c55e" : isEnd ? "#ef4444" : "#fbbf24",
+          scale: isSelected ? 9 : editMode ? 5 : 4,
+          fillColor: isSelected ? "#38bdf8" : baseFill,
           fillOpacity: 1,
-          strokeColor: "#000",
-          strokeWeight: 1,
+          strokeColor: isSelected ? "#0ea5e9" : "#000",
+          strokeWeight: isSelected ? 3 : 1,
         },
       });
 
@@ -682,7 +693,7 @@ export default function JiuxiangMortgageMapDemo() {
 
       checkpointMarkersRef.current.push(marker);
     });
-  }, [route, editMode, mapReady, viewportVersion]);
+  }, [route, editMode, mapReady, viewportVersion, selectedCheckpointIndex]);
 
   // Bump `viewportVersion` (debounced) when the map finishes panning/zooming,
   // so the marker effect can recompute which checkpoints are visible.
