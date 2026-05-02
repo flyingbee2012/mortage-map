@@ -451,6 +451,20 @@ export default function JiuxiangMortgageMapDemo() {
     });
   }, [selectedCheckpointIndex]);
 
+  // Pan the map to the selected checkpoint if it's outside the current view.
+  useEffect(() => {
+    if (selectedCheckpointIndex === null) return;
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const cp = route[selectedCheckpointIndex];
+    if (!cp) return;
+    const target = { lat: cp.lat, lng: cp.lng };
+    const bounds = map.getBounds();
+    if (!bounds || !bounds.contains(target)) {
+      map.panTo(target);
+    }
+  }, [selectedCheckpointIndex, route]);
+
   // Persist route changes to localStorage — but only when NOT editing,
   // so edits stay tentative until the user clicks Done.
   useEffect(() => {
