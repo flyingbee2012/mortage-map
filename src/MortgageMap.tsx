@@ -931,17 +931,17 @@ export default function JiuxiangMortgageMapDemo() {
 
           <div className="rounded-2xl bg-neutral-800 p-4 space-y-2 text-sm">
             <p>
-              You have paid off{" "}
-              <strong>{formatCurrencyCents(paidPrincipal)}</strong>
+              Total distance: <strong>{totalKm.toFixed(4)} km</strong>
             </p>
             <p>
-              Total distance: <strong>{totalKm.toFixed(4)} km</strong>
+              Distance remaining: <strong>{remainingKm.toFixed(4)} km</strong>
             </p>
             <p>
               You have traveled <strong>{traveledKm.toFixed(4)} km</strong>
             </p>
             <p>
-              Distance remaining: <strong>{remainingKm.toFixed(4)} km</strong>
+              You have paid off{" "}
+              <strong>{formatCurrencyCents(paidPrincipal)}</strong>
             </p>
             <p>
               Each $1 paid moves you{" "}
