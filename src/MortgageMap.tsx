@@ -62,12 +62,6 @@ type RouteSegment = {
   endKm: number;
 };
 
-type TestResult = {
-  name: string;
-  passed: boolean;
-  detail: string;
-};
-
 const DEFAULT_ROUTE: Checkpoint[] = defaultRouteJson as Checkpoint[];
 
 function isValidCheckpoint(value: unknown): value is Checkpoint {
@@ -321,70 +315,6 @@ function getCurrentCheckpoint(
   return `${route[segmentIndex].name} → ${route[segmentIndex + 1].name}`;
 }
 
-function runSmokeTests(route: Checkpoint[]): TestResult[] {
-  const routeLatLng = route.map(({ lat, lng }) => ({ lat, lng }));
-  const { totalKm } = getRouteSegments(routeLatLng);
-  const start = getPointAlongRoute(routeLatLng, 0);
-  const end = getPointAlongRoute(routeLatLng, totalKm);
-  const overEnd = getPointAlongRoute(routeLatLng, totalKm + 10000);
-  const underStart = getPointAlongRoute(routeLatLng, -10000);
-  const midpoint = getPointAlongRoute(routeLatLng, totalKm / 2);
-  const sampleProgress = 0.16;
-  const sampleTraveledKm = sampleProgress * totalKm;
-
-  return [
-    {
-      name: "Route has a positive total distance",
-      passed: totalKm > 1000,
-      detail: `totalKm=${totalKm.toFixed(0)}`,
-    },
-    {
-      name: "Distance 0 returns Seattle",
-      passed:
-        Math.abs(start.lat - route[0].lat) < 0.0001 &&
-        Math.abs(start.lng - route[0].lng) < 0.0001,
-      detail: `lat=${start.lat.toFixed(4)}, lng=${start.lng.toFixed(4)}`,
-    },
-    {
-      name: "Total distance returns Jiuxiang",
-      passed:
-        Math.abs(end.lat - route[route.length - 1].lat) < 0.0001 &&
-        Math.abs(end.lng - route[route.length - 1].lng) < 0.0001,
-      detail: `lat=${end.lat.toFixed(4)}, lng=${end.lng.toFixed(4)}`,
-    },
-    {
-      name: "Negative distance clamps to start",
-      passed:
-        Math.abs(underStart.lat - route[0].lat) < 0.0001 &&
-        Math.abs(underStart.lng - route[0].lng) < 0.0001,
-      detail: `lat=${underStart.lat.toFixed(4)}, lng=${underStart.lng.toFixed(4)}`,
-    },
-    {
-      name: "Overpaid distance clamps to end",
-      passed:
-        Math.abs(overEnd.lat - route[route.length - 1].lat) < 0.0001 &&
-        Math.abs(overEnd.lng - route[route.length - 1].lng) < 0.0001,
-      detail: `lat=${overEnd.lat.toFixed(4)}, lng=${overEnd.lng.toFixed(4)}`,
-    },
-    {
-      name: "Midpoint is a valid coordinate",
-      passed:
-        Number.isFinite(midpoint.lat) &&
-        Number.isFinite(midpoint.lng) &&
-        midpoint.lat >= -90 &&
-        midpoint.lat <= 90 &&
-        midpoint.lng >= -180 &&
-        midpoint.lng <= 180,
-      detail: `lat=${midpoint.lat.toFixed(4)}, lng=${midpoint.lng.toFixed(4)}`,
-    },
-    {
-      name: "Progress math maps 16% payoff to 16% of route",
-      passed: Math.abs(sampleTraveledKm / totalKm - sampleProgress) < 0.000001,
-      detail: `16% = ${sampleTraveledKm.toFixed(0)} km`,
-    },
-  ];
-}
-
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -416,7 +346,6 @@ export default function JiuxiangMortgageMapDemo() {
     () => loadStoredNumber(CURRENT_BALANCE_STORAGE_KEY) ?? 367260.71,
   );
   const [mapError, setMapError] = useState<string | null>(null);
-  const [showTests, setShowTests] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [viewportVersion, setViewportVersion] = useState(0);
   const [editMode, setEditMode] = useState(false);
@@ -504,7 +433,6 @@ export default function JiuxiangMortgageMapDemo() {
     () => getRouteSegments(routeLatLng),
     [routeLatLng],
   );
-  const smokeTests = useMemo(() => runSmokeTests(DEFAULT_ROUTE), []);
 
   const safeOriginalPrincipal = Math.max(0, originalPrincipal || 0);
   const safeCurrentBalance = Math.max(0, currentBalance || 0);
@@ -929,32 +857,48 @@ export default function JiuxiangMortgageMapDemo() {
             </div>
           </div>
 
-          <div className="rounded-2xl bg-neutral-800 p-4 space-y-2 text-sm">
-            <p>
-              Total distance: <strong>{totalKm.toFixed(4)} km</strong>
-            </p>
-            <p>
-              Distance remaining: <strong>{remainingKm.toFixed(4)} km</strong>
-            </p>
-            <p>
-              You have traveled <strong>{traveledKm.toFixed(4)} km</strong>
-            </p>
-            <p>
-              You have paid off{" "}
-              <strong>{formatCurrencyCents(paidPrincipal)}</strong>
-            </p>
-            <p>
-              Each $1 paid moves you{" "}
-              <strong>
-                {safeOriginalPrincipal > 0
-                  ? ((totalKm * 1000) / safeOriginalPrincipal).toFixed(2)
-                  : "0.00"}{" "}
-                m
-              </strong>
-            </p>
-            <p>
-              Current location: <strong>{currentSegment}</strong>
-            </p>
+          <div className="rounded-2xl bg-neutral-800 p-4 space-y-4 text-sm">
+            <div className="space-y-1">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                Distance
+              </h3>
+              <p>
+                Total: <strong>{totalKm.toFixed(4)} km</strong>
+              </p>
+              <p>
+                Traveled: <strong>{traveledKm.toFixed(4)} km</strong>
+              </p>
+              <p>
+                Remaining: <strong>{remainingKm.toFixed(4)} km</strong>
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                Money
+              </h3>
+              <p>
+                Paid off: <strong>{formatCurrencyCents(paidPrincipal)}</strong>
+              </p>
+              <p>
+                Each $1 paid moves you{" "}
+                <strong>
+                  {safeOriginalPrincipal > 0
+                    ? ((totalKm * 1000) / safeOriginalPrincipal).toFixed(2)
+                    : "0.00"}{" "}
+                  m
+                </strong>
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                Location
+              </h3>
+              <p>
+                Currently at: <strong>{currentSegment}</strong>
+              </p>
+            </div>
           </div>
 
           <div className="rounded-2xl bg-neutral-800 p-4 space-y-3">
@@ -1094,30 +1038,6 @@ export default function JiuxiangMortgageMapDemo() {
               </div>
             )}
           </div>
-
-          <button
-            className="w-full rounded-xl bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 px-3 py-2 text-sm transition"
-            type="button"
-            onClick={() => setShowTests((value) => !value)}
-          >
-            {showTests ? "Hide" : "Show"} smoke tests
-          </button>
-
-          {showTests && (
-            <div className="rounded-2xl bg-neutral-800 p-4 text-xs space-y-2">
-              {smokeTests.map((test) => (
-                <div key={test.name} className="flex items-start gap-2">
-                  <span>{test.passed ? "✅" : "❌"}</span>
-                  <div>
-                    <div className="font-medium text-neutral-200">
-                      {test.name}
-                    </div>
-                    <div className="text-neutral-400">{test.detail}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
 
           <p className="text-xs text-neutral-500">
             Total route length: {totalKm.toFixed(4)} km. Distances use the
