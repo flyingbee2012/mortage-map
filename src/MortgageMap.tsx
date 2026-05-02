@@ -515,15 +515,9 @@ export default function JiuxiangMortgageMapDemo() {
         map,
         title: `${index + 1}. ${checkpoint.name}`,
         draggable: editMode,
-        label: {
-          text: String(index + 1),
-          color: "#000",
-          fontSize: "11px",
-          fontWeight: "bold",
-        },
         icon: {
           path: google.maps.SymbolPath.CIRCLE,
-          scale: 9,
+          scale: editMode ? 5 : 3,
           fillColor: isStart ? "#22c55e" : isEnd ? "#ef4444" : "#fbbf24",
           fillOpacity: 1,
           strokeColor: "#000",
