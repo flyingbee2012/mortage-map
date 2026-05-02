@@ -19,6 +19,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 const GOOGLE_MAPS_API_KEY: string =
   (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined) ?? "";
 const GOOGLE_MAPS_SCRIPT_ID = "google-maps-js-api";
+const ROUTE_STORAGE_KEY = "mortgageMap.route.v1";
 
 type LatLng = {
   lat: number;
@@ -43,7 +44,7 @@ type TestResult = {
   detail: string;
 };
 
-const ROUTE: Checkpoint[] = [
+const DEFAULT_ROUTE: Checkpoint[] = [
   { name: "Seattle · Departure", lat: 47.6062, lng: -122.3321 },
   {
     name: "Vancouver · Near the Canadian border",
@@ -65,6 +66,45 @@ const ROUTE: Checkpoint[] = [
   { name: "Chengdu · Sichuan", lat: 30.5728, lng: 104.0668 },
   { name: "Jiuxiang · Destination", lat: 29.518, lng: 102.661 },
 ];
+
+function isValidCheckpoint(value: unknown): value is Checkpoint {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<Checkpoint>;
+  return (
+    typeof candidate.name === "string" &&
+    typeof candidate.lat === "number" &&
+    typeof candidate.lng === "number" &&
+    Number.isFinite(candidate.lat) &&
+    Number.isFinite(candidate.lng) &&
+    candidate.lat >= -90 &&
+    candidate.lat <= 90 &&
+    candidate.lng >= -180 &&
+    candidate.lng <= 180
+  );
+}
+
+function loadStoredRoute(): Checkpoint[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(ROUTE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    if (!parsed.every(isValidCheckpoint)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredRoute(route: Checkpoint[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ROUTE_STORAGE_KEY, JSON.stringify(route));
+  } catch {
+    // ignore quota / serialization errors
+  }
+}
 
 function isApiKeyConfigured(apiKey: string): boolean {
   return Boolean(
@@ -345,24 +385,35 @@ function formatCurrency(value: number): string {
 export default function JiuxiangMortgageMapDemo() {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
-  const markerRef = useRef<google.maps.Marker | null>(null);
+  const currentMarkerRef = useRef<google.maps.Marker | null>(null);
   const polylineRef = useRef<google.maps.Polyline | null>(null);
+  const checkpointMarkersRef = useRef<google.maps.Marker[]>([]);
 
   const [originalPrincipal, setOriginalPrincipal] = useState(500000);
   const [currentBalance, setCurrentBalance] = useState(420000);
   const [extraPayment, setExtraPayment] = useState(1000);
   const [mapError, setMapError] = useState<string | null>(null);
   const [showTests, setShowTests] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [route, setRoute] = useState<Checkpoint[]>(
+    () => loadStoredRoute() ?? DEFAULT_ROUTE,
+  );
+
+  // Persist route changes to localStorage.
+  useEffect(() => {
+    saveStoredRoute(route);
+  }, [route]);
 
   const routeLatLng = useMemo(
-    () => ROUTE.map(({ lat, lng }) => ({ lat, lng })),
-    [],
+    () => route.map(({ lat, lng }) => ({ lat, lng })),
+    [route],
   );
   const { totalKm } = useMemo(
     () => getRouteSegments(routeLatLng),
     [routeLatLng],
   );
-  const smokeTests = useMemo(() => runSmokeTests(ROUTE), []);
+  const smokeTests = useMemo(() => runSmokeTests(DEFAULT_ROUTE), []);
 
   const safeOriginalPrincipal = Math.max(0, originalPrincipal || 0);
   const safeCurrentBalance = Math.max(0, currentBalance || 0);
@@ -383,8 +434,11 @@ export default function JiuxiangMortgageMapDemo() {
     safeOriginalPrincipal > 0
       ? (Math.max(0, extraPayment || 0) / safeOriginalPrincipal) * totalKm
       : 0;
-  const currentSegment = getCurrentCheckpoint(ROUTE, traveledKm);
+  const currentSegment = getCurrentCheckpoint(route, traveledKm);
+  const destinationName =
+    route.length > 0 ? route[route.length - 1].name : "destination";
 
+  // Initialize the map exactly once.
   useEffect(() => {
     let cancelled = false;
 
@@ -394,18 +448,23 @@ export default function JiuxiangMortgageMapDemo() {
 
         if (cancelled || !mapRef.current || mapInstanceRef.current) return;
 
+        const initialCenter = route.length > 0 ? route[0] : { lat: 0, lng: 0 };
+
         const map = new google.maps.Map(mapRef.current, {
-          center: ROUTE[0],
+          center: initialCenter,
           zoom: 3,
           mapTypeId: google.maps.MapTypeId.SATELLITE,
           fullscreenControl: true,
           streetViewControl: false,
           mapTypeControl: true,
+          gestureHandling: "greedy",
         });
 
-        const bounds = new google.maps.LatLngBounds();
-        routeLatLng.forEach((point) => bounds.extend(point));
-        map.fitBounds(bounds);
+        if (route.length > 0) {
+          const bounds = new google.maps.LatLngBounds();
+          route.forEach((point) => bounds.extend(point));
+          map.fitBounds(bounds);
+        }
 
         const polyline = new google.maps.Polyline({
           path: routeLatLng,
@@ -415,15 +474,17 @@ export default function JiuxiangMortgageMapDemo() {
           map,
         });
 
-        const marker = new google.maps.Marker({
+        const currentMarker = new google.maps.Marker({
           position: currentPosition,
           map,
           title: "Your current position",
+          zIndex: 9999,
         });
 
         mapInstanceRef.current = map;
         polylineRef.current = polyline;
-        markerRef.current = marker;
+        currentMarkerRef.current = currentMarker;
+        setMapReady(true);
         setMapError(null);
       } catch (error) {
         if (cancelled) return;
@@ -440,23 +501,148 @@ export default function JiuxiangMortgageMapDemo() {
     return () => {
       cancelled = true;
     };
-  }, [currentPosition, routeLatLng]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // Sync the polyline path whenever the route changes.
   useEffect(() => {
-    if (!markerRef.current) return;
-    markerRef.current.setPosition(currentPosition);
+    if (!polylineRef.current) return;
+    polylineRef.current.setPath(routeLatLng);
+  }, [routeLatLng]);
+
+  // Sync checkpoint markers whenever the route or edit mode changes.
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+
+    // Clear existing checkpoint markers.
+    checkpointMarkersRef.current.forEach((m) => m.setMap(null));
+    checkpointMarkersRef.current = [];
+
+    route.forEach((checkpoint, index) => {
+      const isStart = index === 0;
+      const isEnd = index === route.length - 1;
+      const marker = new google.maps.Marker({
+        position: { lat: checkpoint.lat, lng: checkpoint.lng },
+        map,
+        title: `${index + 1}. ${checkpoint.name}`,
+        draggable: editMode,
+        label: {
+          text: String(index + 1),
+          color: "#000",
+          fontSize: "11px",
+          fontWeight: "bold",
+        },
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 9,
+          fillColor: isStart ? "#22c55e" : isEnd ? "#ef4444" : "#fbbf24",
+          fillOpacity: 1,
+          strokeColor: "#000",
+          strokeWeight: 1,
+        },
+      });
+
+      if (editMode) {
+        marker.addListener("dragend", (event: google.maps.MapMouseEvent) => {
+          if (!event.latLng) return;
+          const newLat = event.latLng.lat();
+          const newLng = event.latLng.lng();
+          setRoute((prev) =>
+            prev.map((cp, i) =>
+              i === index ? { ...cp, lat: newLat, lng: newLng } : cp,
+            ),
+          );
+        });
+        marker.addListener("rightclick", () => {
+          setRoute((prev) => prev.filter((_, i) => i !== index));
+        });
+      }
+
+      checkpointMarkersRef.current.push(marker);
+    });
+  }, [route, editMode, mapReady]);
+
+  // Map click listener — adds a checkpoint when in edit mode.
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current) return;
+    if (!editMode) return;
+    const map = mapInstanceRef.current;
+
+    const listener = map.addListener(
+      "click",
+      (event: google.maps.MapMouseEvent) => {
+        if (!event.latLng) return;
+        const lat = event.latLng.lat();
+        const lng = event.latLng.lng();
+        setRoute((prev) => [
+          ...prev,
+          {
+            name: `Checkpoint ${prev.length + 1}`,
+            lat,
+            lng,
+          },
+        ]);
+      },
+    );
+
+    return () => {
+      google.maps.event.removeListener(listener);
+    };
+  }, [editMode, mapReady]);
+
+  // Keep the current-position marker in sync.
+  useEffect(() => {
+    if (!currentMarkerRef.current) return;
+    currentMarkerRef.current.setPosition(currentPosition);
   }, [currentPosition]);
+
+  // Route mutation helpers.
+  const moveCheckpoint = (index: number, direction: -1 | 1) => {
+    setRoute((prev) => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+  const renameCheckpoint = (index: number, name: string) => {
+    setRoute((prev) =>
+      prev.map((cp, i) => (i === index ? { ...cp, name } : cp)),
+    );
+  };
+  const deleteCheckpoint = (index: number) => {
+    setRoute((prev) => prev.filter((_, i) => i !== index));
+  };
+  const resetRoute = () => {
+    if (
+      window.confirm(
+        "Reset to the default Seattle \u2192 Jiuxiang route? Your current edits will be lost.",
+      )
+    ) {
+      setRoute(DEFAULT_ROUTE);
+    }
+  };
+  const fitMapToRoute = () => {
+    if (!mapInstanceRef.current || route.length === 0) return;
+    const bounds = new google.maps.LatLngBounds();
+    route.forEach((p) => bounds.extend(p));
+    mapInstanceRef.current.fitBounds(bounds);
+  };
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 p-6">
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
         <section className="rounded-2xl bg-neutral-900 shadow-xl p-5 space-y-5">
           <div>
-            <h1 className="text-2xl font-semibold">Walking to Jiuxiang</h1>
+            <h1 className="text-2xl font-semibold">
+              Walking to {destinationName.split("·")[0].trim()}
+            </h1>
             <p className="text-sm text-neutral-400 mt-2">
-              Turn your mortgage balance into a road from Seattle to Jiuxiang.
-              Every bit of principal you pay off brings you closer to the
-              destination.
+              Turn your mortgage balance into a journey. Every bit of principal
+              you pay off brings you closer to the destination. Edit the route
+              below to make it your own.
             </p>
           </div>
 
@@ -532,16 +718,124 @@ export default function JiuxiangMortgageMapDemo() {
               You have traveled <strong>{traveledKm.toFixed(0)} km</strong>
             </p>
             <p>
-              Distance remaining to Jiuxiang:{" "}
-              <strong>{remainingKm.toFixed(0)} km</strong>
+              Distance remaining: <strong>{remainingKm.toFixed(0)} km</strong>
             </p>
             <p>
               Current location: <strong>{currentSegment}</strong>
             </p>
             <p className="text-neutral-300">
               This extra payment would move you about{" "}
-              <strong>{extraPaymentKm.toFixed(1)} km</strong> closer to Jiuxiang
+              <strong>{extraPaymentKm.toFixed(1)} km</strong> closer
             </p>
+          </div>
+
+          <div className="rounded-2xl bg-neutral-800 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-neutral-200">
+                Route ({route.length} checkpoints)
+              </h2>
+              <button
+                className={`rounded-lg border px-2 py-1 text-xs transition ${
+                  editMode
+                    ? "border-emerald-500/50 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30"
+                    : "border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-700"
+                }`}
+                type="button"
+                onClick={() => setEditMode((value) => !value)}
+              >
+                {editMode ? "Done editing" : "Edit route"}
+              </button>
+            </div>
+
+            {editMode && (
+              <p className="text-xs text-neutral-400 leading-relaxed">
+                Click the map to add a checkpoint. Drag a marker to move it.
+                Right-click a marker to delete it.
+              </p>
+            )}
+
+            {route.length === 0 ? (
+              <p className="text-xs text-neutral-500 italic">
+                No checkpoints yet. Turn on edit mode and click the map to add
+                some.
+              </p>
+            ) : (
+              <ol className="space-y-1 max-h-64 overflow-y-auto pr-1">
+                {route.map((checkpoint, index) => (
+                  <li key={index} className="flex items-center gap-1 text-xs">
+                    <span className="w-5 text-right text-neutral-500">
+                      {index + 1}.
+                    </span>
+                    {editMode ? (
+                      <input
+                        className="flex-1 min-w-0 rounded bg-neutral-900 border border-neutral-700 px-2 py-1 outline-none"
+                        value={checkpoint.name}
+                        onChange={(e) =>
+                          renameCheckpoint(index, e.target.value)
+                        }
+                      />
+                    ) : (
+                      <span
+                        className="flex-1 min-w-0 truncate text-neutral-200"
+                        title={`${checkpoint.name} (${checkpoint.lat.toFixed(3)}, ${checkpoint.lng.toFixed(3)})`}
+                      >
+                        {checkpoint.name}
+                      </span>
+                    )}
+                    {editMode && (
+                      <>
+                        <button
+                          className="rounded border border-neutral-700 bg-neutral-900 px-1.5 py-0.5 text-neutral-300 hover:bg-neutral-700 disabled:opacity-30"
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() => moveCheckpoint(index, -1)}
+                          title="Move up"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          className="rounded border border-neutral-700 bg-neutral-900 px-1.5 py-0.5 text-neutral-300 hover:bg-neutral-700 disabled:opacity-30"
+                          type="button"
+                          disabled={index === route.length - 1}
+                          onClick={() => moveCheckpoint(index, 1)}
+                          title="Move down"
+                        >
+                          ↓
+                        </button>
+                        <button
+                          className="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-red-200 hover:bg-red-500/20"
+                          type="button"
+                          onClick={() => deleteCheckpoint(index)}
+                          title="Delete"
+                        >
+                          ✕
+                        </button>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )}
+
+            {editMode && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-700"
+                  type="button"
+                  onClick={fitMapToRoute}
+                  disabled={route.length === 0}
+                >
+                  Fit map to route
+                </button>
+                <button
+                  className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-700"
+                  type="button"
+                  onClick={resetRoute}
+                >
+                  Reset to default
+                </button>
+              </div>
+            )}
           </div>
 
           <button
@@ -569,8 +863,9 @@ export default function JiuxiangMortgageMapDemo() {
           )}
 
           <p className="text-xs text-neutral-500">
-            Route length in this demo: {totalKm.toFixed(0)} km. The route is a
-            symbolic approximation and does not represent a real walkable path.
+            Total route length: {totalKm.toFixed(0)} km. Distances use the
+            great-circle formula between checkpoints; the path is symbolic, not
+            a real walkable / drivable route.
           </p>
         </section>
 
