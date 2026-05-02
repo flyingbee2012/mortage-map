@@ -925,6 +925,15 @@ export default function JiuxiangMortgageMapDemo() {
               Distance remaining: <strong>{remainingKm.toFixed(4)} km</strong>
             </p>
             <p>
+              Each $1 paid moves you{" "}
+              <strong>
+                {safeOriginalPrincipal > 0
+                  ? ((totalKm * 1000) / safeOriginalPrincipal).toFixed(2)
+                  : "0.00"}{" "}
+                m
+              </strong>
+            </p>
+            <p>
               Current location: <strong>{currentSegment}</strong>
             </p>
           </div>
