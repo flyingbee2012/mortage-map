@@ -723,6 +723,22 @@ export default function JiuxiangMortgageMapDemo() {
       prev.map((cp, i) => (i === index ? { ...cp, name } : cp)),
     );
   };
+  const insertCheckpointAt = (index: number) => {
+    setRoute((prev) => {
+      if (index <= 0 || index > prev.length) return prev;
+      const before = prev[index - 1];
+      const after = prev[index] ?? before;
+      const lat = (before.lat + after.lat) / 2;
+      const lng = (before.lng + after.lng) / 2;
+      const next = [...prev];
+      next.splice(index, 0, {
+        name: `Checkpoint ${prev.length + 1}`,
+        lat,
+        lng,
+      });
+      return next;
+    });
+  };
   const deleteCheckpoint = (index: number) => {
     setRoute((prev) => prev.filter((_, i) => i !== index));
   };
@@ -964,6 +980,19 @@ export default function JiuxiangMortgageMapDemo() {
                     )}
                     {editMode && (
                       <>
+                        <button
+                          className="rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-30"
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() => insertCheckpointAt(index)}
+                          title={
+                            index === 0
+                              ? "Cannot insert before the first checkpoint"
+                              : `Insert a new checkpoint between ${route[index - 1].name} and ${checkpoint.name}`
+                          }
+                        >
+                          +
+                        </button>
                         <button
                           className="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-red-200 hover:bg-red-500/20"
                           type="button"
