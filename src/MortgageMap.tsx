@@ -837,10 +837,13 @@ export default function JiuxiangMortgageMapDemo() {
             <span className="text-sm text-neutral-300">Original principal</span>
             <input
               className="w-full rounded-xl bg-neutral-800 border border-neutral-700 px-3 py-2 outline-none"
-              min={0}
-              type="number"
+              type="text"
+              inputMode="decimal"
               value={originalPrincipal}
-              onChange={(e) => setOriginalPrincipal(Number(e.target.value))}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (Number.isFinite(n)) setOriginalPrincipal(Math.max(0, n));
+              }}
             />
           </label>
 
@@ -849,11 +852,13 @@ export default function JiuxiangMortgageMapDemo() {
             <div className="flex items-stretch gap-2">
               <input
                 className="flex-1 min-w-0 rounded-xl bg-neutral-800 border border-neutral-700 px-3 py-2 outline-none"
-                min={0}
-                step={0.01}
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={currentBalance}
-                onChange={(e) => setCurrentBalance(Number(e.target.value))}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isFinite(n)) setCurrentBalance(Math.max(0, n));
+                }}
               />
               <div
                 className="flex flex-col rounded-lg overflow-hidden border border-neutral-700"
