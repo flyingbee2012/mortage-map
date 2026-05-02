@@ -494,6 +494,10 @@ export default function JiuxiangMortgageMapDemo() {
   }, [routeLatLng]);
 
   // Sync checkpoint markers whenever the route or edit mode changes.
+  // Performance: when NOT in edit mode, we only render the start (green) and
+  // end (red) markers — even with thousands of checkpoints, the polyline
+  // alone shows the route shape and pan/zoom stays smooth. In edit mode we
+  // render every checkpoint so they can be dragged / right-click-deleted.
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
@@ -502,7 +506,16 @@ export default function JiuxiangMortgageMapDemo() {
     checkpointMarkersRef.current.forEach((m) => m.setMap(null));
     checkpointMarkersRef.current = [];
 
-    route.forEach((checkpoint, index) => {
+    const indicesToRender = editMode
+      ? route.map((_, i) => i)
+      : route.length === 0
+        ? []
+        : route.length === 1
+          ? [0]
+          : [0, route.length - 1];
+
+    indicesToRender.forEach((index) => {
+      const checkpoint = route[index];
       const isStart = index === 0;
       const isEnd = index === route.length - 1;
       const marker = new google.maps.Marker({
@@ -512,7 +525,7 @@ export default function JiuxiangMortgageMapDemo() {
         draggable: editMode,
         icon: {
           path: google.maps.SymbolPath.CIRCLE,
-          scale: editMode ? 5 : 3,
+          scale: editMode ? 5 : 4,
           fillColor: isStart ? "#22c55e" : isEnd ? "#ef4444" : "#fbbf24",
           fillOpacity: 1,
           strokeColor: "#000",
