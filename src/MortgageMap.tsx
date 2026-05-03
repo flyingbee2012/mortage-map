@@ -484,9 +484,22 @@ export default function JiuxiangMortgageMapDemo() {
   // Mortgage inputs are persisted manually via the Save button below; no
   // auto-save effect, so editing the values is tentative until the user
   // explicitly clicks Save.
+  // Transient "Saved" message shown next to the Save button. Cleared after
+  // ~2s. The timer ref lets a rapid second Save reset the countdown without
+  // stacking timeouts.
+  const [savedFlash, setSavedFlash] = useState(false);
+  const savedFlashTimerRef = useRef<number | null>(null);
   const saveMortgageInputs = () => {
     saveStoredNumber(ORIGINAL_PRINCIPAL_STORAGE_KEY, originalPrincipal);
     saveStoredNumber(CURRENT_BALANCE_STORAGE_KEY, currentBalance);
+    setSavedFlash(true);
+    if (savedFlashTimerRef.current !== null) {
+      window.clearTimeout(savedFlashTimerRef.current);
+    }
+    savedFlashTimerRef.current = window.setTimeout(() => {
+      setSavedFlash(false);
+      savedFlashTimerRef.current = null;
+    }, 2000);
   };
   const resetMortgageInputs = () => {
     setOriginalPrincipal(initialPrincipalRef.current);
@@ -907,23 +920,34 @@ export default function JiuxiangMortgageMapDemo() {
             </div>
           </label>
 
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="flex-1 rounded-lg border border-emerald-500/50 bg-emerald-500/20 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-500/30 transition"
-              onClick={saveMortgageInputs}
-              title="Persist the current principal and balance to localStorage so they reload next time."
+          <div className="space-y-1">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="flex-1 rounded-lg border border-emerald-500/50 bg-emerald-500/20 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-500/30 transition"
+                onClick={saveMortgageInputs}
+                title="Persist the current principal and balance to localStorage so they reload next time."
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 transition"
+                onClick={resetMortgageInputs}
+                title="Restore the values to whatever was loaded when the app started. Does not modify localStorage."
+              >
+                Reset
+              </button>
+            </div>
+            <div
+              role="status"
+              aria-live="polite"
+              className={`text-xs text-emerald-300 transition-opacity duration-300 ${
+                savedFlash ? "opacity-100" : "opacity-0"
+              }`}
             >
-              Save
-            </button>
-            <button
-              type="button"
-              className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 transition"
-              onClick={resetMortgageInputs}
-              title="Restore the values to whatever was loaded when the app started. Does not modify localStorage."
-            >
-              Reset
-            </button>
+              ✓ Saved to local storage
+            </div>
           </div>
 
           <div className="space-y-3 pt-2">
