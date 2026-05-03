@@ -484,14 +484,28 @@ export default function JiuxiangMortgageMapDemo() {
   // Mortgage inputs are persisted manually via the Save button below; no
   // auto-save effect, so editing the values is tentative until the user
   // explicitly clicks Save.
+  // Tracks the values most recently persisted to localStorage. Used by the
+  // Save handler to skip writes (and the "Saved" flash) when nothing has
+  // changed since the previous save / initial load.
+  const lastSavedPrincipalRef = useRef<number>(initialPrincipalRef.current);
+  const lastSavedBalanceRef = useRef<number>(initialBalanceRef.current);
   // Transient "Saved" message shown next to the Save button. Cleared after
   // ~2s. The timer ref lets a rapid second Save reset the countdown without
   // stacking timeouts.
   const [savedFlash, setSavedFlash] = useState(false);
   const savedFlashTimerRef = useRef<number | null>(null);
   const saveMortgageInputs = () => {
+    if (
+      originalPrincipal === lastSavedPrincipalRef.current &&
+      currentBalance === lastSavedBalanceRef.current
+    ) {
+      // Nothing changed since the last save / initial load — no-op.
+      return;
+    }
     saveStoredNumber(ORIGINAL_PRINCIPAL_STORAGE_KEY, originalPrincipal);
     saveStoredNumber(CURRENT_BALANCE_STORAGE_KEY, currentBalance);
+    lastSavedPrincipalRef.current = originalPrincipal;
+    lastSavedBalanceRef.current = currentBalance;
     setSavedFlash(true);
     if (savedFlashTimerRef.current !== null) {
       window.clearTimeout(savedFlashTimerRef.current);
