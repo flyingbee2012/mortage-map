@@ -365,40 +365,43 @@ export default function JiuxiangMortgageMapDemo() {
   const [currentBalanceText, setCurrentBalanceText] = useState(() =>
     String(initialBalanceRef.current),
   );
+  // A valid entry is a non-negative decimal number, optionally with a single
+  // decimal point. Empty string is treated as invalid here so we can disable
+  // Save / step buttons until the user types something.
+  // Allowed examples: "0", "34", "45.56", "0.99", ".5", "34."
+  // Rejected examples: "", "abc", "1.2.3", "-5", "1e3", "1,000"
+  const NUMERIC_INPUT_RE = /^(?:\d+\.?\d*|\.\d+)$/;
+  const isValidNumericInput = (s: string): boolean =>
+    NUMERIC_INPUT_RE.test(s.trim());
+  const principalValid = isValidNumericInput(originalPrincipalText);
+  const balanceValid = isValidNumericInput(currentBalanceText);
+  const inputsValid = principalValid && balanceValid;
+
   // While the user is typing we ONLY update the text state — no parsing,
   // no numeric-state updates, so none of the downstream calculations
   // (route position, marker, distances) re-run on every keystroke. We
   // commit the parsed number on blur (or on Enter, see input handlers).
   const commitPrincipalText = () => {
     const raw = originalPrincipalText.trim();
-    if (raw === "") {
-      setOriginalPrincipal(0);
-      setOriginalPrincipalText("0");
+    if (!isValidNumericInput(raw)) {
+      // Invalid input: snap the text back to the last valid number so the
+      // committed state stays clean.
+      setOriginalPrincipalText(String(originalPrincipal));
       return;
     }
     const n = Number(raw);
-    if (Number.isFinite(n) && n >= 0) {
-      setOriginalPrincipal(n);
-      setOriginalPrincipalText(String(n));
-    } else {
-      // Invalid input: snap the text back to the last valid number.
-      setOriginalPrincipalText(String(originalPrincipal));
-    }
+    setOriginalPrincipal(n);
+    setOriginalPrincipalText(String(n));
   };
   const commitBalanceText = () => {
     const raw = currentBalanceText.trim();
-    if (raw === "") {
-      setCurrentBalance(0);
-      setCurrentBalanceText("0");
+    if (!isValidNumericInput(raw)) {
+      setCurrentBalanceText(String(currentBalance));
       return;
     }
     const n = Number(raw);
-    if (Number.isFinite(n) && n >= 0) {
-      setCurrentBalance(n);
-      setCurrentBalanceText(String(n));
-    } else {
-      setCurrentBalanceText(String(currentBalance));
-    }
+    setCurrentBalance(n);
+    setCurrentBalanceText(String(n));
   };
   // Updater that bumps the numeric balance AND keeps the text input in sync.
   // Used by the +/- step buttons.
@@ -495,6 +498,7 @@ export default function JiuxiangMortgageMapDemo() {
   const [savedFlash, setSavedFlash] = useState(false);
   const savedFlashTimerRef = useRef<number | null>(null);
   const saveMortgageInputs = () => {
+    if (!inputsValid) return;
     if (
       originalPrincipal === lastSavedPrincipalRef.current &&
       currentBalance === lastSavedBalanceRef.current
@@ -867,26 +871,41 @@ export default function JiuxiangMortgageMapDemo() {
           <label className="block space-y-2">
             <span className="text-sm text-neutral-300">Original principal</span>
             <input
-              className="w-full rounded-xl bg-neutral-800 border border-neutral-700 px-3 py-2 outline-none"
+              className={`w-full rounded-xl bg-neutral-800 border px-3 py-2 outline-none ${
+                principalValid
+                  ? "border-neutral-700"
+                  : "border-red-500/70 focus:border-red-400"
+              }`}
               type="text"
               inputMode="decimal"
               value={originalPrincipalText}
+              aria-invalid={!principalValid}
               onChange={(e) => setOriginalPrincipalText(e.target.value)}
               onBlur={commitPrincipalText}
               onKeyDown={(e) => {
                 if (e.key === "Enter") (e.target as HTMLInputElement).blur();
               }}
             />
+            {!principalValid && (
+              <p className="text-xs text-red-400">
+                Enter a non-negative number, e.g. 34 or 45.56.
+              </p>
+            )}
           </label>
 
           <label className="block space-y-2">
             <span className="text-sm text-neutral-300">Current balance</span>
             <div className="flex items-stretch gap-2">
               <input
-                className="flex-1 min-w-0 rounded-xl bg-neutral-800 border border-neutral-700 px-3 py-2 outline-none"
+                className={`flex-1 min-w-0 rounded-xl bg-neutral-800 border px-3 py-2 outline-none ${
+                  balanceValid
+                    ? "border-neutral-700"
+                    : "border-red-500/70 focus:border-red-400"
+                }`}
                 type="text"
                 inputMode="decimal"
                 value={currentBalanceText}
+                aria-invalid={!balanceValid}
                 onChange={(e) => setCurrentBalanceText(e.target.value)}
                 onBlur={commitBalanceText}
                 onKeyDown={(e) => {
@@ -899,15 +918,17 @@ export default function JiuxiangMortgageMapDemo() {
               >
                 <button
                   type="button"
-                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
+                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
                   onClick={() => stepCurrentBalance(1)}
+                  disabled={!balanceValid}
                 >
                   +$1
                 </button>
                 <button
                   type="button"
-                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700"
+                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed"
                   onClick={() => stepCurrentBalance(-1)}
+                  disabled={!balanceValid}
                 >
                   −$1
                 </button>
@@ -918,29 +939,41 @@ export default function JiuxiangMortgageMapDemo() {
               >
                 <button
                   type="button"
-                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
+                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
                   onClick={() => stepCurrentBalance(0.01)}
+                  disabled={!balanceValid}
                 >
                   +1¢
                 </button>
                 <button
                   type="button"
-                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700"
+                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed"
                   onClick={() => stepCurrentBalance(-0.01)}
+                  disabled={!balanceValid}
                 >
                   −1¢
                 </button>
               </div>
             </div>
+            {!balanceValid && (
+              <p className="text-xs text-red-400">
+                Enter a non-negative number, e.g. 34 or 45.56.
+              </p>
+            )}
           </label>
 
           <div className="space-y-1">
             <div className="flex gap-2">
               <button
                 type="button"
-                className="flex-1 rounded-lg border border-emerald-500/50 bg-emerald-500/20 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-500/30 transition"
+                className="flex-1 rounded-lg border border-emerald-500/50 bg-emerald-500/20 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-500/30 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-500/20"
                 onClick={saveMortgageInputs}
-                title="Persist the current principal and balance to localStorage so they reload next time."
+                disabled={!inputsValid}
+                title={
+                  inputsValid
+                    ? "Persist the current principal and balance to localStorage so they reload next time."
+                    : "Fix the invalid input(s) above before saving."
+                }
               >
                 Save
               </button>
