@@ -339,11 +339,21 @@ export default function JiuxiangMortgageMapDemo() {
   const polylineRef = useRef<google.maps.Polyline | null>(null);
   const checkpointMarkersRef = useRef<google.maps.Marker[]>([]);
 
+  // Snapshot of the principal/balance values at app load. Used by the Reset
+  // button to restore inputs to their initial state without touching
+  // localStorage. Stored in a ref so it persists across renders and is not
+  // affected by later state updates.
+  const initialPrincipalRef = useRef<number>(
+    loadStoredNumber(ORIGINAL_PRINCIPAL_STORAGE_KEY) ?? 367260.71,
+  );
+  const initialBalanceRef = useRef<number>(
+    loadStoredNumber(CURRENT_BALANCE_STORAGE_KEY) ?? 367260.71,
+  );
   const [originalPrincipal, setOriginalPrincipal] = useState(
-    () => loadStoredNumber(ORIGINAL_PRINCIPAL_STORAGE_KEY) ?? 367260.71,
+    () => initialPrincipalRef.current,
   );
   const [currentBalance, setCurrentBalance] = useState(
-    () => loadStoredNumber(CURRENT_BALANCE_STORAGE_KEY) ?? 367260.71,
+    () => initialBalanceRef.current,
   );
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -417,13 +427,17 @@ export default function JiuxiangMortgageMapDemo() {
     setEditMode(false);
   };
 
-  // Persist mortgage inputs to localStorage.
-  useEffect(() => {
+  // Mortgage inputs are persisted manually via the Save button below; no
+  // auto-save effect, so editing the values is tentative until the user
+  // explicitly clicks Save.
+  const saveMortgageInputs = () => {
     saveStoredNumber(ORIGINAL_PRINCIPAL_STORAGE_KEY, originalPrincipal);
-  }, [originalPrincipal]);
-  useEffect(() => {
     saveStoredNumber(CURRENT_BALANCE_STORAGE_KEY, currentBalance);
-  }, [currentBalance]);
+  };
+  const resetMortgageInputs = () => {
+    setOriginalPrincipal(initialPrincipalRef.current);
+    setCurrentBalance(initialBalanceRef.current);
+  };
 
   const routeLatLng = useMemo(
     () => route.map(({ lat, lng }) => ({ lat, lng })),
@@ -686,12 +700,12 @@ export default function JiuxiangMortgageMapDemo() {
       if (index <= 0 || index > prev.length) return prev;
       const before = prev[index - 1];
       const after = prev[index] ?? before;
-      // Place the new checkpoint 90% of the way from `after` toward `before`,
+      // Place the new checkpoint 95% of the way from `after` toward `before`,
       // so it sits right next to the row the user clicked the + on. This keeps
       // the new marker inside the current view (the selected/clicked
       // checkpoint is almost always already visible) instead of landing at
       // the geometric midpoint, which can be far off-screen for long hops.
-      const t = 0.9;
+      const t = 0.95;
       const lat = after.lat + (before.lat - after.lat) * t;
       const lng = after.lng + (before.lng - after.lng) * t;
       const next = [...prev];
@@ -850,6 +864,25 @@ export default function JiuxiangMortgageMapDemo() {
               </div>
             </div>
           </label>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="flex-1 rounded-lg border border-emerald-500/50 bg-emerald-500/20 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-500/30 transition"
+              onClick={saveMortgageInputs}
+              title="Persist the current principal and balance to localStorage so they reload next time."
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 transition"
+              onClick={resetMortgageInputs}
+              title="Restore the values to whatever was loaded when the app started. Does not modify localStorage."
+            >
+              Reset
+            </button>
+          </div>
 
           <div className="space-y-3 pt-2">
             <div className="h-3 rounded-full bg-neutral-800 overflow-hidden">
