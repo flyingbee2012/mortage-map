@@ -374,7 +374,15 @@ export default function JiuxiangMortgageMapDemo() {
   const isValidNumericInput = (s: string): boolean =>
     NUMERIC_INPUT_RE.test(s.trim());
   const principalValid = isValidNumericInput(originalPrincipalText);
-  const balanceValid = isValidNumericInput(currentBalanceText);
+  const balanceSyntaxValid = isValidNumericInput(currentBalanceText);
+  // Cross-field rule: current balance cannot exceed original principal.
+  // Only meaningful when both fields parse as numbers — otherwise we let
+  // the per-field syntax errors speak for themselves.
+  const balanceExceedsPrincipal =
+    principalValid &&
+    balanceSyntaxValid &&
+    Number(currentBalanceText.trim()) > Number(originalPrincipalText.trim());
+  const balanceValid = balanceSyntaxValid && !balanceExceedsPrincipal;
   const inputsValid = principalValid && balanceValid;
 
   // While the user is typing we ONLY update the text state — no parsing,
@@ -400,14 +408,20 @@ export default function JiuxiangMortgageMapDemo() {
       return;
     }
     const n = Number(raw);
+    // Reject values that exceed the original principal.
+    if (n > originalPrincipal) {
+      setCurrentBalanceText(String(currentBalance));
+      return;
+    }
     setCurrentBalance(n);
     setCurrentBalanceText(String(n));
   };
   // Updater that bumps the numeric balance AND keeps the text input in sync.
-  // Used by the +/- step buttons.
+  // Used by the +/- step buttons. Clamps to [0, originalPrincipal].
   const stepCurrentBalance = (delta: number) => {
     setCurrentBalance((v) => {
-      const next = Math.max(0, Math.round(((v || 0) + delta) * 100) / 100);
+      const raw = Math.round(((v || 0) + delta) * 100) / 100;
+      const next = clamp(raw, 0, originalPrincipal);
       setCurrentBalanceText(String(next));
       return next;
     });
@@ -955,9 +969,14 @@ export default function JiuxiangMortgageMapDemo() {
                 </button>
               </div>
             </div>
-            {!balanceValid && (
+            {!balanceSyntaxValid && (
               <p className="text-xs text-red-400">
                 Enter a non-negative number, e.g. 34 or 45.56.
+              </p>
+            )}
+            {balanceSyntaxValid && balanceExceedsPrincipal && (
+              <p className="text-xs text-red-400">
+                Current balance cannot exceed the original principal.
               </p>
             )}
           </label>
