@@ -355,6 +355,60 @@ export default function JiuxiangMortgageMapDemo() {
   const [currentBalance, setCurrentBalance] = useState(
     () => initialBalanceRef.current,
   );
+  // Raw text shown in the inputs. We keep this separate from the numeric
+  // state so partial entries like "3." or "3.80" survive while typing
+  // (Number("3.") === 3 would otherwise wipe the trailing period on every
+  // keystroke).
+  const [originalPrincipalText, setOriginalPrincipalText] = useState(() =>
+    String(initialPrincipalRef.current),
+  );
+  const [currentBalanceText, setCurrentBalanceText] = useState(() =>
+    String(initialBalanceRef.current),
+  );
+  // While the user is typing we ONLY update the text state — no parsing,
+  // no numeric-state updates, so none of the downstream calculations
+  // (route position, marker, distances) re-run on every keystroke. We
+  // commit the parsed number on blur (or on Enter, see input handlers).
+  const commitPrincipalText = () => {
+    const raw = originalPrincipalText.trim();
+    if (raw === "") {
+      setOriginalPrincipal(0);
+      setOriginalPrincipalText("0");
+      return;
+    }
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0) {
+      setOriginalPrincipal(n);
+      setOriginalPrincipalText(String(n));
+    } else {
+      // Invalid input: snap the text back to the last valid number.
+      setOriginalPrincipalText(String(originalPrincipal));
+    }
+  };
+  const commitBalanceText = () => {
+    const raw = currentBalanceText.trim();
+    if (raw === "") {
+      setCurrentBalance(0);
+      setCurrentBalanceText("0");
+      return;
+    }
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0) {
+      setCurrentBalance(n);
+      setCurrentBalanceText(String(n));
+    } else {
+      setCurrentBalanceText(String(currentBalance));
+    }
+  };
+  // Updater that bumps the numeric balance AND keeps the text input in sync.
+  // Used by the +/- step buttons.
+  const stepCurrentBalance = (delta: number) => {
+    setCurrentBalance((v) => {
+      const next = Math.max(0, Math.round(((v || 0) + delta) * 100) / 100);
+      setCurrentBalanceText(String(next));
+      return next;
+    });
+  };
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [viewportVersion, setViewportVersion] = useState(0);
@@ -437,6 +491,8 @@ export default function JiuxiangMortgageMapDemo() {
   const resetMortgageInputs = () => {
     setOriginalPrincipal(initialPrincipalRef.current);
     setCurrentBalance(initialBalanceRef.current);
+    setOriginalPrincipalText(String(initialPrincipalRef.current));
+    setCurrentBalanceText(String(initialBalanceRef.current));
   };
 
   const routeLatLng = useMemo(
@@ -787,10 +843,11 @@ export default function JiuxiangMortgageMapDemo() {
               className="w-full rounded-xl bg-neutral-800 border border-neutral-700 px-3 py-2 outline-none"
               type="text"
               inputMode="decimal"
-              value={originalPrincipal}
-              onChange={(e) => {
-                const n = Number(e.target.value);
-                if (Number.isFinite(n)) setOriginalPrincipal(Math.max(0, n));
+              value={originalPrincipalText}
+              onChange={(e) => setOriginalPrincipalText(e.target.value)}
+              onBlur={commitPrincipalText}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
               }}
             />
           </label>
@@ -802,10 +859,11 @@ export default function JiuxiangMortgageMapDemo() {
                 className="flex-1 min-w-0 rounded-xl bg-neutral-800 border border-neutral-700 px-3 py-2 outline-none"
                 type="text"
                 inputMode="decimal"
-                value={currentBalance}
-                onChange={(e) => {
-                  const n = Number(e.target.value);
-                  if (Number.isFinite(n)) setCurrentBalance(Math.max(0, n));
+                value={currentBalanceText}
+                onChange={(e) => setCurrentBalanceText(e.target.value)}
+                onBlur={commitBalanceText}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                 }}
               />
               <div
@@ -815,22 +873,14 @@ export default function JiuxiangMortgageMapDemo() {
                 <button
                   type="button"
                   className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
-                  onClick={() =>
-                    setCurrentBalance((v) =>
-                      Math.max(0, Math.round(((v || 0) + 1) * 100) / 100),
-                    )
-                  }
+                  onClick={() => stepCurrentBalance(1)}
                 >
                   +$1
                 </button>
                 <button
                   type="button"
                   className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700"
-                  onClick={() =>
-                    setCurrentBalance((v) =>
-                      Math.max(0, Math.round(((v || 0) - 1) * 100) / 100),
-                    )
-                  }
+                  onClick={() => stepCurrentBalance(-1)}
                 >
                   −$1
                 </button>
@@ -842,22 +892,14 @@ export default function JiuxiangMortgageMapDemo() {
                 <button
                   type="button"
                   className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
-                  onClick={() =>
-                    setCurrentBalance((v) =>
-                      Math.max(0, Math.round(((v || 0) + 0.01) * 100) / 100),
-                    )
-                  }
+                  onClick={() => stepCurrentBalance(0.01)}
                 >
                   +1¢
                 </button>
                 <button
                   type="button"
                   className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700"
-                  onClick={() =>
-                    setCurrentBalance((v) =>
-                      Math.max(0, Math.round(((v || 0) - 0.01) * 100) / 100),
-                    )
-                  }
+                  onClick={() => stepCurrentBalance(-0.01)}
                 >
                   −1¢
                 </button>
