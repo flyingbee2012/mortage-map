@@ -276,12 +276,15 @@ function getRouteSegments(route: LatLng[]): {
   return { segments, totalKm };
 }
 
-function getPointAlongRoute(
+// Variant of getPointAlongRoute that takes a pre-computed segments array,
+// so callers that already memoize the geometry don't pay the O(n) cost of
+// rebuilding the segment list on every render.
+function getPointAlongSegments(
   route: LatLng[],
+  segments: RouteSegment[],
+  totalKm: number,
   distanceFromStartKm: number,
 ): LatLng {
-  const { segments, totalKm } = getRouteSegments(route);
-
   if (route.length === 0) return { lat: 0, lng: 0 };
   if (route.length === 1 || segments.length === 0) return route[0];
 
@@ -295,12 +298,13 @@ function getPointAlongRoute(
   return interpolateGreatCircle(segment.start, segment.end, fraction);
 }
 
-function getCurrentCheckpoint(
+// Variant of getCurrentCheckpoint that takes a pre-computed segments array.
+function getCurrentCheckpointFromSegments(
   route: Checkpoint[],
+  segments: RouteSegment[],
+  totalKm: number,
   distanceFromStartKm: number,
 ): string {
-  const { segments, totalKm } = getRouteSegments(route);
-
   if (route.length === 0) return "Unknown";
   if (route.length === 1 || segments.length === 0) return route[0].name;
 
@@ -442,6 +446,14 @@ export default function JiuxiangMortgageMapDemo() {
   // when the user clicks its marker on the map.
   const selectedListItemRef = useRef<HTMLLIElement | null>(null);
 
+  // Ref mirror of selectedCheckpointIndex so the marker-build effect can
+  // read the latest value without listing it as a dep (which would force a
+  // full marker rebuild on every selection change).
+  const selectedIndexRef = useRef<number | null>(selectedCheckpointIndex);
+  useEffect(() => {
+    selectedIndexRef.current = selectedCheckpointIndex;
+  }, [selectedCheckpointIndex]);
+
   // Clear selection if the route shrinks past the selected index.
   useEffect(() => {
     if (
@@ -540,11 +552,27 @@ export default function JiuxiangMortgageMapDemo() {
     setCurrentBalanceText(String(initialBalanceRef.current));
   };
 
-  const routeLatLng = useMemo(
-    () => route.map(({ lat, lng }) => ({ lat, lng })),
-    [route],
-  );
-  const { totalKm } = useMemo(
+  // Stable geometry projection: returns the SAME array reference whenever
+  // every checkpoint's lat/lng is unchanged, even if `route` itself is a new
+  // array (e.g. after a rename). Lets all the geometry-derived memos and
+  // effects skip work when only names change.
+  const routeLatLngRef = useRef<LatLng[]>([]);
+  const routeLatLng = useMemo(() => {
+    const next = route.map(({ lat, lng }) => ({ lat, lng }));
+    const prev = routeLatLngRef.current;
+    if (
+      prev.length === next.length &&
+      prev.every((p, i) => p.lat === next[i].lat && p.lng === next[i].lng)
+    ) {
+      return prev;
+    }
+    routeLatLngRef.current = next;
+    return next;
+  }, [route]);
+  // Compute segments + totalKm once per geometry change and reuse them for
+  // currentPosition / currentSegment instead of having those helpers walk
+  // the route a second and third time per render.
+  const { segments: routeSegments, totalKm } = useMemo(
     () => getRouteSegments(routeLatLng),
     [routeLatLng],
   );
@@ -561,10 +589,20 @@ export default function JiuxiangMortgageMapDemo() {
   const traveledKm = progress * totalKm;
   const remainingKm = Math.max(0, totalKm - traveledKm);
   const currentPosition = useMemo(
-    () => getPointAlongRoute(routeLatLng, traveledKm),
-    [routeLatLng, traveledKm],
+    () =>
+      getPointAlongSegments(routeLatLng, routeSegments, totalKm, traveledKm),
+    [routeLatLng, routeSegments, totalKm, traveledKm],
   );
-  const currentSegment = getCurrentCheckpoint(route, traveledKm);
+  const currentSegment = useMemo(
+    () =>
+      getCurrentCheckpointFromSegments(
+        route,
+        routeSegments,
+        totalKm,
+        traveledKm,
+      ),
+    [route, routeSegments, totalKm, traveledKm],
+  );
   const destinationName =
     route.length > 0 ? route[route.length - 1].name : "destination";
 
@@ -641,13 +679,57 @@ export default function JiuxiangMortgageMapDemo() {
     polylineRef.current.setPath(routeLatLng);
   }, [routeLatLng]);
 
-  // Sync checkpoint markers whenever the route or edit mode changes.
+  // Map of route index -> Marker for the currently-rendered checkpoint
+  // markers. Used by the selection-styling effect below to update only the
+  // previously- and newly-selected markers without rebuilding everything.
+  const markerByIndexRef = useRef<Map<number, google.maps.Marker>>(new Map());
+  // Tracks which index is currently styled as "selected" on the map. Lets
+  // the styling effect know which marker to revert when the selection
+  // changes.
+  const styledSelectedIndexRef = useRef<number | null>(null);
+
+  // Helper: apply the right icon / zIndex to an existing marker based on its
+  // role. Pulled out so the build effect and the selection-styling effect
+  // produce identical visuals.
+  const styleMarker = (
+    marker: google.maps.Marker,
+    {
+      index,
+      routeLength,
+      editMode: em,
+      isSelected,
+    }: {
+      index: number;
+      routeLength: number;
+      editMode: boolean;
+      isSelected: boolean;
+    },
+  ) => {
+    const isStart = index === 0;
+    const isEnd = index === routeLength - 1;
+    const baseFill = isStart ? "#22c55e" : isEnd ? "#ef4444" : "#fbbf24";
+    marker.setIcon({
+      path: google.maps.SymbolPath.CIRCLE,
+      scale: isSelected ? 9 : em ? 5 : 4,
+      fillColor: isSelected ? "#38bdf8" : baseFill,
+      fillOpacity: 1,
+      strokeColor: isSelected ? "#0ea5e9" : "#000",
+      strokeWeight: isSelected ? 3 : 1,
+    });
+    marker.setZIndex(isSelected ? 9998 : null);
+  };
+
+  // Build / rebuild checkpoint markers when geometry, edit mode, or the
+  // viewport changes. Crucially, this effect does NOT depend on
+  // selectedCheckpointIndex — selection-only changes are handled by the
+  // small styling effect below, so clicking a row no longer destroys and
+  // recreates up to 30 markers.
+  //
   // Performance: when NOT in edit mode, we only render the start (green) and
   // end (red) markers — even with thousands of checkpoints, the polyline
   // alone shows the route shape and pan/zoom stays smooth. In edit mode we
   // render only checkpoints inside the current viewport (plus start + end),
   // so the number of live Marker objects stays small even for huge routes.
-  // The `viewportVersion` dependency triggers a re-render after pan/zoom.
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
@@ -655,6 +737,11 @@ export default function JiuxiangMortgageMapDemo() {
     // Clear existing checkpoint markers.
     checkpointMarkersRef.current.forEach((m) => m.setMap(null));
     checkpointMarkersRef.current = [];
+    markerByIndexRef.current = new Map();
+    // The previous styled-selected marker (if any) was just destroyed, so
+    // forget it — the build loop will style the current selection from
+    // scratch and the styling effect will pick up subsequent changes.
+    styledSelectedIndexRef.current = null;
 
     let indicesToRender: number[];
     if (!editMode) {
@@ -676,18 +763,14 @@ export default function JiuxiangMortgageMapDemo() {
           }
         });
       }
-      // Always include start, end, and selected so they stay visible.
+      // Always include start and end so they stay visible. The selected
+      // marker is intentionally NOT force-included here — the pan-to-selected
+      // effect already moves the map when the selection is off-screen, which
+      // bumps viewportVersion and causes this effect to re-run with the
+      // selection naturally inside `bounds`.
       if (route.length > 0 && !visible.includes(0)) visible.unshift(0);
       if (route.length > 1 && !visible.includes(route.length - 1)) {
         visible.push(route.length - 1);
-      }
-      if (
-        selectedCheckpointIndex !== null &&
-        selectedCheckpointIndex >= 0 &&
-        selectedCheckpointIndex < route.length &&
-        !visible.includes(selectedCheckpointIndex)
-      ) {
-        visible.push(selectedCheckpointIndex);
       }
 
       // Hard cap: keep at most MAX_EDIT_MARKERS, sampled evenly along the
@@ -706,27 +789,26 @@ export default function JiuxiangMortgageMapDemo() {
       }
     }
 
+    // Read the current selection via ref so this effect doesn't need it as
+    // a dep (and so we don't force a rebuild on every selection change).
+    const currentSelected = selectedIndexRef.current;
+
     indicesToRender.forEach((index) => {
       const checkpoint = route[index];
-      const isStart = index === 0;
-      const isEnd = index === route.length - 1;
-      const isSelected = selectedCheckpointIndex === index;
-      const baseFill = isStart ? "#22c55e" : isEnd ? "#ef4444" : "#fbbf24";
+      const isSelected = currentSelected === index;
       const marker = new google.maps.Marker({
         position: { lat: checkpoint.lat, lng: checkpoint.lng },
         map,
         title: `${index + 1}. ${checkpoint.name}`,
         draggable: editMode,
-        zIndex: isSelected ? 9998 : undefined,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: isSelected ? 9 : editMode ? 5 : 4,
-          fillColor: isSelected ? "#38bdf8" : baseFill,
-          fillOpacity: 1,
-          strokeColor: isSelected ? "#0ea5e9" : "#000",
-          strokeWeight: isSelected ? 3 : 1,
-        },
       });
+      styleMarker(marker, {
+        index,
+        routeLength: route.length,
+        editMode,
+        isSelected,
+      });
+      if (isSelected) styledSelectedIndexRef.current = index;
 
       if (editMode) {
         marker.addListener("dragend", (event: google.maps.MapMouseEvent) => {
@@ -749,8 +831,49 @@ export default function JiuxiangMortgageMapDemo() {
       });
 
       checkpointMarkersRef.current.push(marker);
+      markerByIndexRef.current.set(index, marker);
     });
-  }, [route, editMode, mapReady, viewportVersion, selectedCheckpointIndex]);
+  }, [route, editMode, mapReady, viewportVersion]);
+
+  // Selection-only styling effect: when selectedCheckpointIndex changes
+  // without a route/edit/viewport change, just retint the previous marker
+  // back to its base style and tint the new one as selected. O(1) instead
+  // of rebuilding every visible marker.
+  useEffect(() => {
+    if (!mapReady) return;
+    const markers = markerByIndexRef.current;
+    const prevIndex = styledSelectedIndexRef.current;
+
+    if (prevIndex !== null && prevIndex !== selectedCheckpointIndex) {
+      const prevMarker = markers.get(prevIndex);
+      if (prevMarker) {
+        styleMarker(prevMarker, {
+          index: prevIndex,
+          routeLength: route.length,
+          editMode,
+          isSelected: false,
+        });
+      }
+    }
+
+    if (selectedCheckpointIndex !== null) {
+      const nextMarker = markers.get(selectedCheckpointIndex);
+      if (nextMarker) {
+        styleMarker(nextMarker, {
+          index: selectedCheckpointIndex,
+          routeLength: route.length,
+          editMode,
+          isSelected: true,
+        });
+      }
+    }
+
+    styledSelectedIndexRef.current = selectedCheckpointIndex;
+    // route/editMode are read for styling only; a change to either of them
+    // triggers the build effect above which already handles styling, so we
+    // intentionally exclude them from this effect's deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCheckpointIndex, mapReady]);
 
   // Bump `viewportVersion` (debounced) when the map finishes panning/zooming,
   // so the marker effect can recompute which checkpoints are visible.
