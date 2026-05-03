@@ -853,19 +853,27 @@ export default function JiuxiangMortgageMapDemo() {
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 p-6">
       <div className="w-full grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
-        <section className="rounded-2xl bg-neutral-900 shadow-xl p-5 space-y-5">
-          <div>
-            <h1 className="text-2xl font-semibold">
-              Walking to {destinationName.split("·")[0].trim()}
-            </h1>
-            <p className="text-sm text-neutral-400 mt-2">
-              Turn your mortgage balance into a journey. Every bit of principal
-              you pay off brings you closer to the destination. Edit the route
-              below to make it your own.
-            </p>
-          </div>
+        <section
+          className={`rounded-2xl bg-neutral-900 shadow-xl p-5 ${
+            editMode ? "flex flex-col gap-5 h-[calc(100vh-3rem)]" : "space-y-5"
+          }`}
+        >
+          {!editMode && (
+            <>
+              <div>
+                <h1 className="text-2xl font-semibold">
+                  Walking to {destinationName.split("·")[0].trim()}
+                </h1>
+                <p className="text-sm text-neutral-400 mt-2">
+                  Turn your mortgage balance into a journey. Every bit of
+                  principal you pay off brings you closer to the destination.
+                  Edit the route below to make it your own.
+                </p>
+              </div>
+            </>
+          )}
 
-          {!isApiKeyConfigured(GOOGLE_MAPS_API_KEY) && (
+          {!editMode && !isApiKeyConfigured(GOOGLE_MAPS_API_KEY) && (
             <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100 space-y-2">
               <p className="font-semibold">
                 Google Maps API key is not configured.
@@ -882,197 +890,215 @@ export default function JiuxiangMortgageMapDemo() {
             </div>
           )}
 
-          <label className="block space-y-2">
-            <span className="text-sm text-neutral-300">Original principal</span>
-            <input
-              className={`w-full rounded-xl bg-neutral-800 border px-3 py-2 outline-none ${
-                principalValid
-                  ? "border-neutral-700"
-                  : "border-red-500/70 focus:border-red-400"
-              }`}
-              type="text"
-              inputMode="decimal"
-              value={originalPrincipalText}
-              aria-invalid={!principalValid}
-              onChange={(e) => setOriginalPrincipalText(e.target.value)}
-              onBlur={commitPrincipalText}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-              }}
-            />
-            {!principalValid && (
-              <p className="text-xs text-red-400">
-                Enter a non-negative number, e.g. 34 or 45.56.
-              </p>
-            )}
-          </label>
-
-          <label className="block space-y-2">
-            <span className="text-sm text-neutral-300">Current balance</span>
-            <div className="flex items-stretch gap-2">
+          {!editMode && (
+            <label className="block space-y-2">
+              <span className="text-sm text-neutral-300">
+                Original principal
+              </span>
               <input
-                className={`flex-1 min-w-0 rounded-xl bg-neutral-800 border px-3 py-2 outline-none ${
-                  balanceValid
+                className={`w-full rounded-xl bg-neutral-800 border px-3 py-2 outline-none ${
+                  principalValid
                     ? "border-neutral-700"
                     : "border-red-500/70 focus:border-red-400"
                 }`}
                 type="text"
                 inputMode="decimal"
-                value={currentBalanceText}
-                aria-invalid={!balanceValid}
-                onChange={(e) => setCurrentBalanceText(e.target.value)}
-                onBlur={commitBalanceText}
+                value={originalPrincipalText}
+                aria-invalid={!principalValid}
+                onChange={(e) => setOriginalPrincipalText(e.target.value)}
+                onBlur={commitPrincipalText}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                 }}
               />
-              <div
-                className="flex flex-col rounded-lg overflow-hidden border border-neutral-700"
-                title="Step by $1"
-              >
+              {!principalValid && (
+                <p className="text-xs text-red-400">
+                  Enter a non-negative number, e.g. 34 or 45.56.
+                </p>
+              )}
+            </label>
+          )}
+
+          {!editMode && (
+            <label className="block space-y-2">
+              <span className="text-sm text-neutral-300">Current balance</span>
+              <div className="flex items-stretch gap-2">
+                <input
+                  className={`flex-1 min-w-0 rounded-xl bg-neutral-800 border px-3 py-2 outline-none ${
+                    balanceValid
+                      ? "border-neutral-700"
+                      : "border-red-500/70 focus:border-red-400"
+                  }`}
+                  type="text"
+                  inputMode="decimal"
+                  value={currentBalanceText}
+                  aria-invalid={!balanceValid}
+                  onChange={(e) => setCurrentBalanceText(e.target.value)}
+                  onBlur={commitBalanceText}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter")
+                      (e.target as HTMLInputElement).blur();
+                  }}
+                />
+                <div
+                  className="flex flex-col rounded-lg overflow-hidden border border-neutral-700"
+                  title="Step by $1"
+                >
+                  <button
+                    type="button"
+                    className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                    onClick={() => stepCurrentBalance(1)}
+                    disabled={!balanceValid}
+                  >
+                    +$1
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    onClick={() => stepCurrentBalance(-1)}
+                    disabled={!balanceValid}
+                  >
+                    −$1
+                  </button>
+                </div>
+                <div
+                  className="flex flex-col rounded-lg overflow-hidden border border-neutral-700"
+                  title="Step by 1¢"
+                >
+                  <button
+                    type="button"
+                    className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                    onClick={() => stepCurrentBalance(0.01)}
+                    disabled={!balanceValid}
+                  >
+                    +1¢
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    onClick={() => stepCurrentBalance(-0.01)}
+                    disabled={!balanceValid}
+                  >
+                    −1¢
+                  </button>
+                </div>
+              </div>
+              {!balanceSyntaxValid && (
+                <p className="text-xs text-red-400">
+                  Enter a non-negative number, e.g. 34 or 45.56.
+                </p>
+              )}
+              {balanceSyntaxValid && balanceExceedsPrincipal && (
+                <p className="text-xs text-red-400">
+                  Current balance cannot exceed the original principal.
+                </p>
+              )}
+            </label>
+          )}
+
+          {!editMode && (
+            <div className="space-y-1">
+              <div className="flex gap-2">
                 <button
                   type="button"
-                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={() => stepCurrentBalance(1)}
-                  disabled={!balanceValid}
+                  className="flex-1 rounded-lg border border-emerald-500/50 bg-emerald-500/20 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-500/30 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-500/20"
+                  onClick={saveMortgageInputs}
+                  disabled={!inputsValid}
+                  title={
+                    inputsValid
+                      ? "Persist the current principal and balance to localStorage so they reload next time."
+                      : "Fix the invalid input(s) above before saving."
+                  }
                 >
-                  +$1
+                  Save
                 </button>
                 <button
                   type="button"
-                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={() => stepCurrentBalance(-1)}
-                  disabled={!balanceValid}
+                  className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 transition"
+                  onClick={resetMortgageInputs}
+                  title="Restore the values to whatever was loaded when the app started. Does not modify localStorage."
                 >
-                  −$1
+                  Reset
                 </button>
               </div>
               <div
-                className="flex flex-col rounded-lg overflow-hidden border border-neutral-700"
-                title="Step by 1¢"
+                role="status"
+                aria-live="polite"
+                className={`text-xs text-emerald-300 transition-opacity duration-300 ${
+                  savedFlash ? "opacity-100" : "opacity-0"
+                }`}
               >
-                <button
-                  type="button"
-                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={() => stepCurrentBalance(0.01)}
-                  disabled={!balanceValid}
-                >
-                  +1¢
-                </button>
-                <button
-                  type="button"
-                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={() => stepCurrentBalance(-0.01)}
-                  disabled={!balanceValid}
-                >
-                  −1¢
-                </button>
+                ✓ Saved to local storage
               </div>
             </div>
-            {!balanceSyntaxValid && (
-              <p className="text-xs text-red-400">
-                Enter a non-negative number, e.g. 34 or 45.56.
-              </p>
-            )}
-            {balanceSyntaxValid && balanceExceedsPrincipal && (
-              <p className="text-xs text-red-400">
-                Current balance cannot exceed the original principal.
-              </p>
-            )}
-          </label>
+          )}
 
-          <div className="space-y-1">
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="flex-1 rounded-lg border border-emerald-500/50 bg-emerald-500/20 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-500/30 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-500/20"
-                onClick={saveMortgageInputs}
-                disabled={!inputsValid}
-                title={
-                  inputsValid
-                    ? "Persist the current principal and balance to localStorage so they reload next time."
-                    : "Fix the invalid input(s) above before saving."
-                }
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 transition"
-                onClick={resetMortgageInputs}
-                title="Restore the values to whatever was loaded when the app started. Does not modify localStorage."
-              >
-                Reset
-              </button>
+          {!editMode && (
+            <div className="space-y-3 pt-2">
+              <div className="h-3 rounded-full bg-neutral-800 overflow-hidden">
+                <div
+                  className="h-full bg-white"
+                  style={{ width: `${progress * 100}%` }}
+                />
+              </div>
+              <div className="text-sm text-neutral-300">
+                Progress: {(progress * 100).toFixed(2)}%
+              </div>
             </div>
-            <div
-              role="status"
-              aria-live="polite"
-              className={`text-xs text-emerald-300 transition-opacity duration-300 ${
-                savedFlash ? "opacity-100" : "opacity-0"
-              }`}
-            >
-              ✓ Saved to local storage
-            </div>
-          </div>
+          )}
 
-          <div className="space-y-3 pt-2">
-            <div className="h-3 rounded-full bg-neutral-800 overflow-hidden">
-              <div
-                className="h-full bg-white"
-                style={{ width: `${progress * 100}%` }}
-              />
-            </div>
-            <div className="text-sm text-neutral-300">
-              Progress: {(progress * 100).toFixed(2)}%
-            </div>
-          </div>
+          {!editMode && (
+            <div className="rounded-2xl bg-neutral-800 p-4 space-y-4 text-sm">
+              <div className="space-y-1">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                  Distance
+                </h3>
+                <p>
+                  Total: <strong>{totalKm.toFixed(4)} km</strong>
+                </p>
+                <p>
+                  Traveled: <strong>{traveledKm.toFixed(4)} km</strong>
+                </p>
+                <p>
+                  Remaining: <strong>{remainingKm.toFixed(4)} km</strong>
+                </p>
+              </div>
 
-          <div className="rounded-2xl bg-neutral-800 p-4 space-y-4 text-sm">
-            <div className="space-y-1">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-                Distance
-              </h3>
-              <p>
-                Total: <strong>{totalKm.toFixed(4)} km</strong>
-              </p>
-              <p>
-                Traveled: <strong>{traveledKm.toFixed(4)} km</strong>
-              </p>
-              <p>
-                Remaining: <strong>{remainingKm.toFixed(4)} km</strong>
-              </p>
-            </div>
+              <div className="space-y-1">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                  Money
+                </h3>
+                <p>
+                  Paid off:{" "}
+                  <strong>{formatCurrencyCents(paidPrincipal)}</strong>
+                </p>
+                <p>
+                  Each $1 paid moves you{" "}
+                  <strong>
+                    {safeOriginalPrincipal > 0
+                      ? ((totalKm * 1000) / safeOriginalPrincipal).toFixed(2)
+                      : "0.00"}{" "}
+                    m
+                  </strong>
+                </p>
+              </div>
 
-            <div className="space-y-1">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-                Money
-              </h3>
-              <p>
-                Paid off: <strong>{formatCurrencyCents(paidPrincipal)}</strong>
-              </p>
-              <p>
-                Each $1 paid moves you{" "}
-                <strong>
-                  {safeOriginalPrincipal > 0
-                    ? ((totalKm * 1000) / safeOriginalPrincipal).toFixed(2)
-                    : "0.00"}{" "}
-                  m
-                </strong>
-              </p>
+              <div className="space-y-1">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                  Location
+                </h3>
+                <p>
+                  Currently at: <strong>{currentSegment}</strong>
+                </p>
+              </div>
             </div>
+          )}
 
-            <div className="space-y-1">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-                Location
-              </h3>
-              <p>
-                Currently at: <strong>{currentSegment}</strong>
-              </p>
-            </div>
-          </div>
-
-          <div className="rounded-2xl bg-neutral-800 p-4 space-y-3">
+          <div
+            className={`rounded-2xl bg-neutral-800 p-4 space-y-3 ${
+              editMode ? "flex-1 min-h-0 flex flex-col" : ""
+            }`}
+          >
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-neutral-200">
                 Route ({route.length} checkpoints)
@@ -1116,7 +1142,11 @@ export default function JiuxiangMortgageMapDemo() {
                 some.
               </p>
             ) : (
-              <ol className="space-y-1 max-h-64 overflow-y-auto pr-1">
+              <ol
+                className={`space-y-1 overflow-y-auto pr-1 ${
+                  editMode ? "flex-1 min-h-0" : "max-h-64"
+                }`}
+              >
                 {route.map((checkpoint, index) => {
                   const isSelected = selectedCheckpointIndex === index;
                   return (
