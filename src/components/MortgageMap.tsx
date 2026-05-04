@@ -888,13 +888,15 @@ export default function JiuXiangMortgageMap() {
               </div>
 
               <div className="space-y-1">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-                  Money
-                </h3>
-                <p>
-                  Paid off:{" "}
-                  <strong>{formatCurrencyCents(paidPrincipal)}</strong>
-                </p>
+                <div className="flex items-baseline gap-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                    Money
+                  </h3>
+                  <span>
+                    Paid off:{" "}
+                    <strong>{formatCurrencyCents(paidPrincipal)}</strong>
+                  </span>
+                </div>
                 <p>
                   Each $1 paid moves you{" "}
                   <strong>
