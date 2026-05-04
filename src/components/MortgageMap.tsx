@@ -680,20 +680,20 @@ export default function JiuxiangMortgageMapDemo() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 p-6">
-      <div className="w-full grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">
+    <div className="h-screen overflow-hidden bg-neutral-950 text-neutral-100 p-4">
+      <div className="w-full h-full flex flex-col lg:flex-row gap-4">
         <section
-          className={`rounded-2xl bg-neutral-900 shadow-xl p-5 ${
-            editMode ? "flex flex-col gap-5 h-[calc(100vh-3rem)]" : "space-y-5"
+          className={`rounded-2xl bg-neutral-900 shadow-xl p-4 flex-1 min-h-0 lg:flex-none lg:w-[380px] lg:h-full ${
+            editMode ? "flex flex-col gap-3" : "space-y-3 overflow-y-auto"
           }`}
         >
           {!editMode && (
             <>
               <div>
-                <h1 className="text-2xl font-semibold">
+                <h1 className="text-xl font-semibold">
                   Walking to {destinationName.split("·")[0].trim()}
                 </h1>
-                <p className="text-sm text-neutral-400 mt-2">
+                <p className="text-xs text-neutral-400 mt-1">
                   Turn your mortgage balance into a journey. Every bit of
                   principal you pay off brings you closer to the destination.
                   Edit the route below to make it your own.
@@ -720,12 +720,12 @@ export default function JiuxiangMortgageMapDemo() {
           )}
 
           {!editMode && (
-            <label className="block space-y-2">
+            <label className="block space-y-1">
               <span className="text-sm text-neutral-300">
                 Original principal
               </span>
               <input
-                className={`w-full rounded-xl bg-neutral-800 border px-3 py-2 outline-none ${
+                className={`w-full rounded-xl bg-neutral-800 border px-3 py-1.5 outline-none ${
                   principalValid
                     ? "border-neutral-700"
                     : "border-red-500/70 focus:border-red-400"
@@ -749,11 +749,11 @@ export default function JiuxiangMortgageMapDemo() {
           )}
 
           {!editMode && (
-            <label className="block space-y-2">
+            <label className="block space-y-1">
               <span className="text-sm text-neutral-300">Current balance</span>
               <div className="flex items-stretch gap-2">
                 <input
-                  className={`flex-1 min-w-0 rounded-xl bg-neutral-800 border px-3 py-2 outline-none ${
+                  className={`flex-1 min-w-0 rounded-xl bg-neutral-800 border px-3 py-1.5 outline-none ${
                     balanceValid
                       ? "border-neutral-700"
                       : "border-red-500/70 focus:border-red-400"
@@ -863,8 +863,8 @@ export default function JiuxiangMortgageMapDemo() {
           )}
 
           {!editMode && (
-            <div className="space-y-3 pt-2">
-              <div className="h-3 rounded-full bg-neutral-800 overflow-hidden">
+            <div className="space-y-2">
+              <div className="h-2 rounded-full bg-neutral-800 overflow-hidden">
                 <div
                   className="h-full bg-white"
                   style={{ width: `${progress * 100}%` }}
@@ -877,7 +877,7 @@ export default function JiuxiangMortgageMapDemo() {
           )}
 
           {!editMode && (
-            <div className="rounded-2xl bg-neutral-800 p-4 space-y-4 text-sm">
+            <div className="rounded-2xl bg-neutral-800 p-3 space-y-3 text-sm">
               <div className="space-y-1">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
                   Distance
@@ -924,7 +924,7 @@ export default function JiuxiangMortgageMapDemo() {
           )}
 
           <div
-            className={`rounded-2xl bg-neutral-800 p-4 space-y-3 ${
+            className={`rounded-2xl bg-neutral-800 p-3 space-y-2 ${
               editMode ? "flex-1 min-h-0 flex flex-col" : ""
             }`}
           >
@@ -1073,7 +1073,7 @@ export default function JiuxiangMortgageMapDemo() {
           </div>
         </section>
 
-        <section className="rounded-2xl overflow-hidden bg-neutral-900 shadow-xl min-h-[680px] relative">
+        <section className="rounded-2xl overflow-hidden bg-neutral-900 shadow-xl flex-1 min-h-0 lg:h-full relative">
           <div ref={mapRef} className="absolute inset-0" />
           {mapError && (
             <div className="absolute inset-0 flex items-center justify-center bg-neutral-950/95 p-6">
