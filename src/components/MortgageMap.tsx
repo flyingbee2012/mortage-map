@@ -958,6 +958,12 @@ export default function JiuxiangMortgageMapDemo() {
             </div>
 
             {editMode && (
+              <p className="text-xs text-neutral-300">
+                Total: <strong>{totalKm.toFixed(4)} km</strong>
+              </p>
+            )}
+
+            {editMode && (
               <p className="text-xs text-neutral-400 leading-relaxed">
                 Use the + buttons below to insert checkpoints between existing
                 ones. Drag a marker to move it. Right-click a marker to delete
