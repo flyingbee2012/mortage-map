@@ -861,15 +861,16 @@ export default function JiuXiangMortgageMap() {
           )}
 
           {!editMode && (
-            <div className="space-y-2">
-              <div className="h-2 rounded-full bg-neutral-800 overflow-hidden">
-                <div
-                  className="h-full bg-white"
-                  style={{ width: `${progress * 100}%` }}
-                />
-              </div>
-              <div className="text-sm text-neutral-300">
-                Progress: {(progress * 100).toFixed(2)}%
+            <div className="relative h-5 rounded-full bg-neutral-800 overflow-hidden">
+              <div
+                className="h-full bg-emerald-500"
+                style={{ width: `${progress * 100}%` }}
+              />
+              <div
+                className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white"
+                style={{ textShadow: "0 1px 2px rgba(0,0,0,0.7)" }}
+              >
+                {(progress * 100).toFixed(2)}%
               </div>
             </div>
           )}
