@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import defaultRouteJson from "./data/defaultRoute.json";
+import { useEffect, useMemo, useRef, useState } from "react";
+import defaultRouteJson from "../data/defaultRoute.json";
+import { CheckpointNameInput } from "./CheckpointNameInput";
 import {
   Checkpoint,
   clamp,
@@ -15,7 +16,7 @@ import {
   saveStoredNumber,
   saveStoredRoute,
   clearStoredRoute,
-} from "./utils/helper";
+} from "../utils/helper";
 
 /**
  * Jiuxiang Mortgage Journey Demo
@@ -992,12 +993,9 @@ export default function JiuxiangMortgageMapDemo() {
                         {index + 1}.
                       </span>
                       {editMode ? (
-                        <input
-                          className="flex-1 min-w-0 rounded bg-neutral-900 border border-neutral-700 px-2 py-1 outline-none"
-                          value={checkpoint.name}
-                          onChange={(e) =>
-                            renameCheckpoint(index, e.target.value)
-                          }
+                        <CheckpointNameInput
+                          initialName={checkpoint.name}
+                          onCommit={(name) => renameCheckpoint(index, name)}
                         />
                       ) : (
                         <span

@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import MortgageMap from "./MortgageMap";
+import MortgageMap from "./components/MortgageMap";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
