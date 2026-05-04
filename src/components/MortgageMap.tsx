@@ -41,8 +41,7 @@ const CURRENT_BALANCE_STORAGE_KEY = "mortgageMap.currentBalance.v1";
 
 const DEFAULT_ROUTE: Checkpoint[] = defaultRouteJson as Checkpoint[];
 
-export default function JiuxiangMortgageMapDemo() {
-  console.log("*** JiuxiangMortgageMapDemo render ***");
+export default function JiuXiangMortgageMap() {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const currentMarkerRef = useRef<google.maps.Marker | null>(null);
@@ -322,23 +321,22 @@ export default function JiuxiangMortgageMapDemo() {
 
         if (cancelled || !mapRef.current || mapInstanceRef.current) return;
 
-        const initialCenter = route.length > 0 ? route[0] : { lat: 0, lng: 0 };
+        // First load: center on the user's current position along the route
+        // (or the start checkpoint if progress is 0) at neighborhood zoom, so
+        // the satellite imagery is legible and the blue arrow is immediately
+        // visible. Users can pop out to the full route via "Fit map to route".
+        const initialCenter =
+          currentPosition ?? (route.length > 0 ? route[0] : { lat: 0, lng: 0 });
 
         const map = new google.maps.Map(mapRef.current, {
           center: initialCenter,
-          zoom: 3,
+          zoom: 15,
           mapTypeId: google.maps.MapTypeId.HYBRID,
           fullscreenControl: true,
           streetViewControl: false,
           mapTypeControl: true,
           gestureHandling: "greedy",
         });
-
-        if (route.length > 0) {
-          const bounds = new google.maps.LatLngBounds();
-          route.forEach((point) => bounds.extend(point));
-          map.fitBounds(bounds);
-        }
 
         const polyline = new google.maps.Polyline({
           path: routeLatLng,
@@ -933,6 +931,17 @@ export default function JiuxiangMortgageMapDemo() {
                 Route ({route.length} checkpoints)
               </h2>
               <div className="flex items-center gap-2">
+                {!editMode && (
+                  <button
+                    className="rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-700 transition disabled:opacity-40"
+                    type="button"
+                    onClick={fitMapToRoute}
+                    disabled={route.length === 0}
+                    title="Zoom out to show the entire route"
+                  >
+                    Fit route
+                  </button>
+                )}
                 {editMode && (
                   <button
                     className="rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-700 transition"
