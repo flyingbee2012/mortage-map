@@ -679,6 +679,15 @@ export default function JiuXiangMortgageMap() {
 
   return (
     <div className="h-screen overflow-hidden bg-neutral-950 text-neutral-100 p-4">
+      <div
+        role="status"
+        aria-live="polite"
+        className={`pointer-events-none fixed top-4 left-1/2 -translate-x-1/2 z-50 rounded-lg border border-emerald-400/60 bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white shadow-lg transition-all duration-300 ${
+          savedFlash ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2"
+        }`}
+      >
+        ✓ Saved to local storage
+      </div>
       <div className="w-full h-full flex flex-col lg:flex-row gap-4">
         <section
           className={`rounded-2xl bg-neutral-900 shadow-xl p-4 flex-1 min-h-0 lg:flex-none lg:w-[380px] lg:h-full ${
@@ -847,15 +856,6 @@ export default function JiuXiangMortgageMap() {
                 >
                   Reset
                 </button>
-              </div>
-              <div
-                role="status"
-                aria-live="polite"
-                className={`text-xs text-emerald-300 transition-opacity duration-300 ${
-                  savedFlash ? "opacity-100" : "opacity-0"
-                }`}
-              >
-                ✓ Saved to local storage
               </div>
             </div>
           )}
