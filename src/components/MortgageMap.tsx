@@ -883,8 +883,7 @@ export default function JiuXiangMortgageMap() {
                 </h3>
                 <p>
                   Total: <strong>{totalKm.toFixed(4)} km</strong>
-                </p>
-                <p>
+                  <span className="mx-2 text-neutral-500">·</span>
                   Traveled: <strong>{traveledKm.toFixed(4)} km</strong>
                 </p>
                 <p>
@@ -912,9 +911,6 @@ export default function JiuXiangMortgageMap() {
               </div>
 
               <div className="space-y-1">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-                  Location
-                </h3>
                 <p>
                   Currently at: <strong>{currentSegment}</strong>
                 </p>
