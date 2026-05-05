@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import defaultRouteJson from "../data/defaultRoute.json";
 import { CheckpointNameInput } from "./CheckpointNameInput";
+import { MobileMortgageInputs } from "./MobileMortgageInputs";
 import {
   Checkpoint,
   clamp,
@@ -732,7 +733,7 @@ export default function JiuXiangMortgageMap() {
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-neutral-950 text-neutral-100 p-4">
+    <div className="h-dvh overflow-hidden bg-neutral-950 text-neutral-100 p-4">
       <div
         role="status"
         aria-live="polite"
@@ -742,8 +743,24 @@ export default function JiuXiangMortgageMap() {
       >
         ✓ Saved to local storage
       </div>
+      {/*
+        Outer responsive layout.
+        - Mobile (<1024px): `flex-col-reverse` stacks children vertically AND
+          reverses their order, so the map (2nd child in JSX) appears ON TOP
+          and the info panel (1st child in JSX) appears BELOW.
+        - Desktop (≥1024px): `lg:flex-row` switches to a side-by-side layout
+          (info panel on the left, map on the right).
+      */}
       <div className="w-full h-full flex flex-col-reverse lg:flex-row gap-4">
-        <section className="rounded-2xl bg-neutral-900 shadow-xl p-4 flex-1 min-h-0 lg:flex-none lg:w-[380px] lg:h-full flex flex-col gap-3">
+        {/*
+          Left/info section.
+          - Mobile: takes the remaining vertical space below the map
+            (`flex-1 min-h-0`) and scrolls internally if its content overflows
+            (`overflow-y-auto`) so the progress bar and stats stay reachable.
+          - Desktop: fixed 380px wide column (`lg:w-[380px]`), full height,
+            no internal scroll (`lg:overflow-visible`).
+        */}
+        <section className="rounded-2xl bg-neutral-900 shadow-xl p-4 flex-1 min-h-0 overflow-y-auto lg:overflow-visible lg:flex-none lg:w-[380px] lg:h-full flex flex-col gap-3">
           {!editMode && (
             <>
               <div>
@@ -777,7 +794,7 @@ export default function JiuXiangMortgageMap() {
           )}
 
           {!editMode && (
-            <label className="block space-y-1">
+            <label className="hidden lg:block space-y-1">
               <span className="text-sm text-neutral-300">
                 Original principal
               </span>
@@ -807,7 +824,7 @@ export default function JiuXiangMortgageMap() {
           )}
 
           {!editMode && (
-            <label className="block space-y-1">
+            <label className="hidden lg:block space-y-1">
               <span className="text-sm text-neutral-300">Current balance</span>
               <div className="flex items-stretch gap-2">
                 <input
@@ -884,6 +901,28 @@ export default function JiuXiangMortgageMap() {
             </label>
           )}
 
+          {/*
+            MOBILE-ONLY mortgage inputs block.
+            Compact two-row layout that replaces the desktop labels-on-top
+            inputs above:
+              Row 1: Original | Current  (read-only, side by side)
+              Row 2: +$1  -$1  +1¢  -1¢  (touch-friendly step buttons)
+            Inputs are read-only on mobile so the on-screen keyboard never
+            pops up; users adjust the balance via the step buttons instead.
+          */}
+          {!editMode && !isLargeScreen && (
+            <MobileMortgageInputs
+              originalPrincipalText={originalPrincipalText}
+              currentBalanceText={currentBalanceText}
+              principalValid={principalValid}
+              balanceValid={balanceValid}
+              balanceExceedsPrincipal={balanceExceedsPrincipal}
+              setOriginalPrincipalText={setOriginalPrincipalText}
+              setCurrentBalanceText={setCurrentBalanceText}
+              stepCurrentBalance={stepCurrentBalance}
+            />
+          )}
+
           {!editMode && (
             <div className="hidden lg:block space-y-1">
               <div className="flex gap-2">
@@ -912,6 +951,10 @@ export default function JiuXiangMortgageMap() {
             </div>
           )}
 
+          {/*
+            Progress bar. Visible on BOTH mobile and desktop.
+            Shown in non-edit mode only.
+          */}
           {!editMode && (
             <div className="relative h-5 rounded-full bg-neutral-800 overflow-hidden">
               <div
@@ -927,6 +970,10 @@ export default function JiuXiangMortgageMap() {
             </div>
           )}
 
+          {/*
+            Stats card (Distance / Money / Currently at).
+            Visible on BOTH mobile and desktop in non-edit mode.
+          */}
           {!editMode && (
             <div className="rounded-2xl bg-neutral-800 p-3 space-y-3 text-sm">
               <div className="space-y-1">
@@ -1125,6 +1172,14 @@ export default function JiuXiangMortgageMap() {
           </div>
         </section>
 
+        {/*
+          Map section. Visible on BOTH mobile and desktop.
+          - Mobile: sits at the TOP of the screen (because the outer wrapper
+            uses `flex-col-reverse` and this is the 2nd JSX child).
+            `min-h-[40vh]` guarantees the map gets at least 40% of the
+            viewport height even when the info panel below is tall.
+          - Desktop: full-height column on the right (`lg:h-full`).
+        */}
         <section className="rounded-2xl overflow-hidden bg-neutral-900 shadow-xl flex-1 min-h-[40vh] lg:min-h-0 lg:h-full relative">
           <div ref={mapRef} className="absolute inset-0" />
           {mapError && (
