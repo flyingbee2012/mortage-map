@@ -579,6 +579,46 @@ export default function JiuXiangMortgageMap() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCheckpointIndex, mapReady]);
 
+  // Non-edit mode: when the user picks a checkpoint from the list, briefly
+  // show its marker on the map (the build effect normally only renders start
+  // + end markers in non-edit mode). Auto-hides after a few seconds.
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current) return;
+    if (editMode) return;
+    if (selectedCheckpointIndex === null) return;
+    // Skip if the selected one is start or end — already rendered.
+    if (
+      selectedCheckpointIndex === 0 ||
+      selectedCheckpointIndex === route.length - 1
+    ) {
+      return;
+    }
+    const cp = route[selectedCheckpointIndex];
+    if (!cp) return;
+    const map = mapInstanceRef.current;
+
+    const marker = new google.maps.Marker({
+      position: { lat: cp.lat, lng: cp.lng },
+      map,
+      title: `${selectedCheckpointIndex + 1}. ${cp.name}`,
+    });
+    styleMarker(marker, {
+      index: selectedCheckpointIndex,
+      routeLength: route.length,
+      editMode: false,
+      isSelected: true,
+    });
+
+    const timeoutId = window.setTimeout(() => {
+      marker.setMap(null);
+    }, 2000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      marker.setMap(null);
+    };
+  }, [selectedCheckpointIndex, editMode, mapReady, route]);
+
   // Bump `viewportVersion` (debounced) when the map finishes panning/zooming,
   // so the marker effect can recompute which checkpoints are visible.
   useEffect(() => {
