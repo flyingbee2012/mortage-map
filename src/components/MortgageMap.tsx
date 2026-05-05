@@ -153,6 +153,21 @@ export default function JiuXiangMortgageMap() {
     mql.addEventListener("change", handler);
     return () => mql.removeEventListener("change", handler);
   }, []);
+  // When the layout swaps between mobile and desktop the map's container
+  // changes size. Google Maps doesn't observe its own container, so we have
+  // to nudge it to recompute the viewport — otherwise the area that was
+  // hidden during initial render shows up as black space. The rAF defers
+  // the trigger until after the browser has applied the new layout.
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const id = window.requestAnimationFrame(() => {
+      const center = map.getCenter();
+      google.maps.event.trigger(map, "resize");
+      if (center) map.setCenter(center);
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [isLargeScreen, mapReady]);
   const [selectedCheckpointIndex, setSelectedCheckpointIndex] = useState<
     number | null
   >(null);
@@ -743,80 +758,74 @@ export default function JiuXiangMortgageMap() {
         ✓ Saved to local storage
       </div>
       {/*
-      {/*
-        Outer responsive layout. We render two completely different control
-        panels based on viewport size (desktop vs mobile) and share the same
-        `MapView`. Order in JSX is also viewport-dependent:
-          - Desktop: control panel on the LEFT, map on the RIGHT.
-          - Mobile:  map on TOP, control panel BELOW.
+        Outer responsive layout. `MapView` is rendered ONCE (outside the
+        conditional) so its DOM node — and the Google Map instance bound to
+        it — is preserved when the viewport crosses the lg breakpoint.
+        Tailwind's `order-first lg:order-last` puts the map on TOP in mobile
+        (flex-col) and on the RIGHT on desktop (flex-row).
       */}
       <div className="w-full h-full flex flex-col lg:flex-row gap-4">
+        <MapView mapRef={mapRef} mapError={mapError} />
         {isLargeScreen ? (
-          <>
-            <DesktopControlPanel
-              apiKey={GOOGLE_MAPS_API_KEY}
-              destinationName={destinationName}
-              originalPrincipalText={originalPrincipalText}
-              currentBalanceText={currentBalanceText}
-              principalValid={principalValid}
-              balanceValid={balanceValid}
-              balanceSyntaxValid={balanceSyntaxValid}
-              balanceExceedsPrincipal={balanceExceedsPrincipal}
-              inputsValid={inputsValid}
-              setOriginalPrincipalText={setOriginalPrincipalText}
-              setCurrentBalanceText={setCurrentBalanceText}
-              commitPrincipalText={commitPrincipalText}
-              commitBalanceText={commitBalanceText}
-              stepCurrentBalance={stepCurrentBalance}
-              saveMortgageInputs={saveMortgageInputs}
-              resetMortgageInputs={resetMortgageInputs}
-              progress={progress}
-              totalKm={totalKm}
-              traveledKm={traveledKm}
-              remainingKm={remainingKm}
-              paidPrincipal={paidPrincipal}
-              safeOriginalPrincipal={safeOriginalPrincipal}
-              currentSegment={currentSegment}
-              route={route}
-              editMode={editMode}
-              startEditingRoute={startEditingRoute}
-              finishEditingRoute={finishEditingRoute}
-              cancelEditingRoute={cancelEditingRoute}
-              selectedCheckpointIndex={selectedCheckpointIndex}
-              setSelectedCheckpointIndex={setSelectedCheckpointIndex}
-              selectedListItemRef={selectedListItemRef}
-              renameCheckpoint={renameCheckpoint}
-              insertCheckpointAt={insertCheckpointAt}
-              deleteCheckpoint={deleteCheckpoint}
-              fitMapToRoute={fitMapToRoute}
-              exportRouteJson={exportRouteJson}
-              resetRoute={resetRoute}
-            />
-            <MapView mapRef={mapRef} mapError={mapError} />
-          </>
+          <DesktopControlPanel
+            apiKey={GOOGLE_MAPS_API_KEY}
+            destinationName={destinationName}
+            originalPrincipalText={originalPrincipalText}
+            currentBalanceText={currentBalanceText}
+            principalValid={principalValid}
+            balanceValid={balanceValid}
+            balanceSyntaxValid={balanceSyntaxValid}
+            balanceExceedsPrincipal={balanceExceedsPrincipal}
+            inputsValid={inputsValid}
+            setOriginalPrincipalText={setOriginalPrincipalText}
+            setCurrentBalanceText={setCurrentBalanceText}
+            commitPrincipalText={commitPrincipalText}
+            commitBalanceText={commitBalanceText}
+            stepCurrentBalance={stepCurrentBalance}
+            saveMortgageInputs={saveMortgageInputs}
+            resetMortgageInputs={resetMortgageInputs}
+            progress={progress}
+            totalKm={totalKm}
+            traveledKm={traveledKm}
+            remainingKm={remainingKm}
+            paidPrincipal={paidPrincipal}
+            safeOriginalPrincipal={safeOriginalPrincipal}
+            currentSegment={currentSegment}
+            route={route}
+            editMode={editMode}
+            startEditingRoute={startEditingRoute}
+            finishEditingRoute={finishEditingRoute}
+            cancelEditingRoute={cancelEditingRoute}
+            selectedCheckpointIndex={selectedCheckpointIndex}
+            setSelectedCheckpointIndex={setSelectedCheckpointIndex}
+            selectedListItemRef={selectedListItemRef}
+            renameCheckpoint={renameCheckpoint}
+            insertCheckpointAt={insertCheckpointAt}
+            deleteCheckpoint={deleteCheckpoint}
+            fitMapToRoute={fitMapToRoute}
+            exportRouteJson={exportRouteJson}
+            resetRoute={resetRoute}
+          />
         ) : (
-          <>
-            <MapView mapRef={mapRef} mapError={mapError} />
-            <MobileControlPanel
-              apiKey={GOOGLE_MAPS_API_KEY}
-              destinationName={destinationName}
-              originalPrincipalText={originalPrincipalText}
-              currentBalanceText={currentBalanceText}
-              principalValid={principalValid}
-              balanceValid={balanceValid}
-              balanceExceedsPrincipal={balanceExceedsPrincipal}
-              setOriginalPrincipalText={setOriginalPrincipalText}
-              setCurrentBalanceText={setCurrentBalanceText}
-              stepCurrentBalance={stepCurrentBalance}
-              progress={progress}
-              totalKm={totalKm}
-              traveledKm={traveledKm}
-              remainingKm={remainingKm}
-              paidPrincipal={paidPrincipal}
-              safeOriginalPrincipal={safeOriginalPrincipal}
-              currentSegment={currentSegment}
-            />
-          </>
+          <MobileControlPanel
+            apiKey={GOOGLE_MAPS_API_KEY}
+            destinationName={destinationName}
+            originalPrincipalText={originalPrincipalText}
+            currentBalanceText={currentBalanceText}
+            principalValid={principalValid}
+            balanceValid={balanceValid}
+            balanceExceedsPrincipal={balanceExceedsPrincipal}
+            setOriginalPrincipalText={setOriginalPrincipalText}
+            setCurrentBalanceText={setCurrentBalanceText}
+            stepCurrentBalance={stepCurrentBalance}
+            progress={progress}
+            totalKm={totalKm}
+            traveledKm={traveledKm}
+            remainingKm={remainingKm}
+            paidPrincipal={paidPrincipal}
+            safeOriginalPrincipal={safeOriginalPrincipal}
+            currentSegment={currentSegment}
+          />
         )}
       </div>
     </div>

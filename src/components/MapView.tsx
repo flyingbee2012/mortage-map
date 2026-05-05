@@ -12,7 +12,7 @@ type MapViewProps = {
  */
 export function MapView({ mapRef, mapError }: MapViewProps) {
   return (
-    <section className="rounded-2xl overflow-hidden bg-neutral-900 shadow-xl flex-1 min-h-[40vh] lg:min-h-0 lg:h-full relative">
+    <section className="rounded-2xl overflow-hidden bg-neutral-900 shadow-xl flex-1 min-h-[40vh] lg:min-h-0 lg:h-full relative order-first lg:order-last">
       <div ref={mapRef} className="absolute inset-0" />
       {mapError && (
         <div className="absolute inset-0 flex items-center justify-center bg-neutral-950/95 p-6">
