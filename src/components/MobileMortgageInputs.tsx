@@ -33,7 +33,7 @@ export function MobileMortgageInputs({
   stepCurrentBalance,
 }: MobileMortgageInputsProps) {
   return (
-    <div className="space-y-2">
+    <div className="shrink-0 space-y-2">
       {/* Row 1: principal + balance side by side */}
       <div className="flex items-center gap-2">
         <label className="flex flex-1 min-w-0 items-center gap-1">

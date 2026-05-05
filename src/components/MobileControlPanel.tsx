@@ -51,7 +51,7 @@ export function MobileControlPanel({
 }: MobileControlPanelProps) {
   return (
     <section className="rounded-2xl bg-neutral-900 shadow-xl p-4 flex-1 min-h-0 overflow-y-auto flex flex-col gap-3">
-      <div>
+      <div className="shrink-0">
         <h1 className="text-xl font-semibold">
           Walking to {destinationName.split("·")[0].trim()}
         </h1>
@@ -62,7 +62,7 @@ export function MobileControlPanel({
       </div>
 
       {!isApiKeyConfigured(apiKey) && (
-        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100 space-y-2">
+        <div className="shrink-0 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100 space-y-2">
           <p className="font-semibold">
             Google Maps API key is not configured.
           </p>
@@ -90,7 +90,7 @@ export function MobileControlPanel({
       />
 
       {/* Progress bar */}
-      <div className="relative h-5 rounded-full bg-neutral-800 overflow-hidden">
+      <div className="shrink-0 relative h-5 rounded-full bg-neutral-800 overflow-hidden">
         <div
           className="h-full bg-emerald-500"
           style={{ width: `${progress * 100}%` }}
@@ -104,7 +104,7 @@ export function MobileControlPanel({
       </div>
 
       {/* Stats card */}
-      <div className="rounded-2xl bg-neutral-800 p-3 space-y-3 text-sm">
+      <div className="shrink-0 rounded-2xl bg-neutral-800 p-3 space-y-3 text-sm">
         <div className="space-y-1">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
             Distance
