@@ -139,6 +139,20 @@ export default function JiuXiangMortgageMap() {
   const [mapReady, setMapReady] = useState(false);
   const [viewportVersion, setViewportVersion] = useState(0);
   const [editMode, setEditMode] = useState(false);
+  // True when the viewport is at Tailwind's `lg` breakpoint (>=1024px).
+  // Drives the mobile-friendly mode: map on top, no route list, no
+  // Save/Reset buttons, read-only mortgage inputs.
+  const [isLargeScreen, setIsLargeScreen] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(min-width: 1024px)").matches,
+  );
+  useEffect(() => {
+    const mql = window.matchMedia("(min-width: 1024px)");
+    const handler = (e: MediaQueryListEvent) => setIsLargeScreen(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
   const [selectedCheckpointIndex, setSelectedCheckpointIndex] = useState<
     number | null
   >(null);
@@ -728,7 +742,7 @@ export default function JiuXiangMortgageMap() {
       >
         ✓ Saved to local storage
       </div>
-      <div className="w-full h-full flex flex-col lg:flex-row gap-4">
+      <div className="w-full h-full flex flex-col-reverse lg:flex-row gap-4">
         <section className="rounded-2xl bg-neutral-900 shadow-xl p-4 flex-1 min-h-0 lg:flex-none lg:w-[380px] lg:h-full flex flex-col gap-3">
           {!editMode && (
             <>
@@ -776,6 +790,7 @@ export default function JiuXiangMortgageMap() {
                 type="text"
                 inputMode="decimal"
                 value={originalPrincipalText}
+                readOnly={!isLargeScreen}
                 aria-invalid={!principalValid}
                 onChange={(e) => setOriginalPrincipalText(e.target.value)}
                 onBlur={commitPrincipalText}
@@ -804,6 +819,7 @@ export default function JiuXiangMortgageMap() {
                   type="text"
                   inputMode="decimal"
                   value={currentBalanceText}
+                  readOnly={!isLargeScreen}
                   aria-invalid={!balanceValid}
                   onChange={(e) => setCurrentBalanceText(e.target.value)}
                   onBlur={commitBalanceText}
@@ -869,7 +885,7 @@ export default function JiuXiangMortgageMap() {
           )}
 
           {!editMode && (
-            <div className="space-y-1">
+            <div className="hidden lg:block space-y-1">
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -956,7 +972,7 @@ export default function JiuXiangMortgageMap() {
             </div>
           )}
 
-          <div className="rounded-2xl bg-neutral-800 p-3 space-y-2 flex-1 min-h-0 flex flex-col">
+          <div className="hidden lg:flex rounded-2xl bg-neutral-800 p-3 space-y-2 flex-1 min-h-0 flex-col">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-neutral-200">
                 Route ({route.length} checkpoints)
@@ -1109,7 +1125,7 @@ export default function JiuXiangMortgageMap() {
           </div>
         </section>
 
-        <section className="rounded-2xl overflow-hidden bg-neutral-900 shadow-xl flex-1 min-h-0 lg:h-full relative">
+        <section className="rounded-2xl overflow-hidden bg-neutral-900 shadow-xl flex-1 min-h-[40vh] lg:min-h-0 lg:h-full relative">
           <div ref={mapRef} className="absolute inset-0" />
           {mapError && (
             <div className="absolute inset-0 flex items-center justify-center bg-neutral-950/95 p-6">
