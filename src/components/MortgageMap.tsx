@@ -763,6 +763,22 @@ export default function JiuXiangMortgageMap() {
     currentMarkerRef.current.setPosition(currentPosition);
   }, [currentPosition, route, editMode]);
 
+  // Auto-pan: if the current-position marker has moved outside the map's
+  // visible bounds (e.g. user kept stepping the balance and the blue arrow
+  // walked off-screen), gently recenter the map on it. We only pan when
+  // it's actually out of view so users who deliberately scrolled the map
+  // elsewhere aren't yanked back on every tick.
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current) return;
+    if (editMode || !currentPosition) return;
+    const map = mapInstanceRef.current;
+    const bounds = map.getBounds();
+    if (!bounds) return;
+    if (!bounds.contains(currentPosition)) {
+      map.panTo(currentPosition);
+    }
+  }, [currentPosition, editMode, mapReady]);
+
   // Route mutation helpers.
   const renameCheckpoint = (index: number, name: string) => {
     setRoute((prev) =>
