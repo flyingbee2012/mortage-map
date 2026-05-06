@@ -1,4 +1,4 @@
-import { MobileMortgageInputs } from "./MobileMortgageInputs";
+import { MortgageInputs } from "./MortgageInputs";
 import { formatCurrencyCents, isApiKeyConfigured } from "../utils/helper";
 
 type MobileControlPanelProps = {
@@ -86,7 +86,7 @@ export function MobileControlPanel({
         </div>
       </div>
 
-      <MobileMortgageInputs
+      <MortgageInputs
         originalPrincipalText={originalPrincipalText}
         currentBalanceText={currentBalanceText}
         balanceValid={balanceValid}

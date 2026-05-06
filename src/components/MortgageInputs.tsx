@@ -86,7 +86,7 @@ export function MortgageInputs({
           className={`flex flex-1 min-w-0 flex-col rounded-lg border bg-neutral-800 px-3 py-2 ${principalCardBorder}`}
         >
           <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
-            Original
+            {editable ? "Original principal" : "Original"}
           </span>
           {isLoadingRemote ? (
             <span
@@ -116,7 +116,7 @@ export function MortgageInputs({
           className={`flex flex-1 min-w-0 flex-col rounded-lg border bg-neutral-800 px-3 py-2 ${balanceCardBorder}`}
         >
           <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
-            Current
+            {editable ? "Current balance" : "Current"}
           </span>
           {isLoadingRemote ? (
             <span

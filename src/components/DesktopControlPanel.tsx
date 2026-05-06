@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import { CheckpointNameInput } from "./CheckpointNameInput";
-import { SkeletonInput } from "./SkeletonInput";
+import { MortgageInputs } from "./MortgageInputs";
 import {
   Checkpoint,
   formatCurrencyCents,
@@ -131,148 +131,8 @@ export function DesktopControlPanel({
         </div>
       )}
 
-      {!editMode && (
-        <label className="space-y-1">
-          <span className="text-sm text-neutral-300">Original principal</span>
-          {isLoadingRemote ? (
-            <SkeletonInput label="Loading original principal" />
-          ) : (
-            <input
-              className={`w-full rounded-xl bg-neutral-800 border px-3 py-1.5 outline-none ${
-                principalValid
-                  ? "border-neutral-700"
-                  : "border-red-500/70 focus:border-red-400"
-              }`}
-              type="text"
-              inputMode="decimal"
-              value={originalPrincipalText}
-              aria-invalid={!principalValid}
-              onChange={(e) => setOriginalPrincipalText(e.target.value)}
-              onBlur={commitPrincipalText}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-              }}
-            />
-          )}
-          {!isLoadingRemote && !principalValid && (
-            <p className="text-xs text-red-400">
-              Enter a non-negative number, e.g. 34 or 45.56.
-            </p>
-          )}
-        </label>
-      )}
-
-      {!editMode && (
-        <label className="space-y-1">
-          <span className="text-sm text-neutral-300">Current balance</span>
-          {isLoadingRemote ? (
-            <SkeletonInput label="Loading current balance" />
-          ) : (
-            <div className="flex items-stretch gap-2">
-              <input
-                className={`flex-1 min-w-0 rounded-xl bg-neutral-800 border px-3 py-1.5 outline-none ${
-                  balanceValid
-                    ? "border-neutral-700"
-                    : "border-red-500/70 focus:border-red-400"
-                }`}
-                type="text"
-                inputMode="decimal"
-                value={currentBalanceText}
-                aria-invalid={!balanceValid}
-                onChange={(e) => setCurrentBalanceText(e.target.value)}
-                onBlur={commitBalanceText}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                }}
-              />
-              <div
-                className="flex flex-col rounded-lg overflow-hidden border border-neutral-700"
-                title="Step by $1"
-              >
-                <button
-                  type="button"
-                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={() => stepCurrentBalance(1)}
-                  disabled={!balanceValid}
-                >
-                  +$1
-                </button>
-                <button
-                  type="button"
-                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={() => stepCurrentBalance(-1)}
-                  disabled={!balanceValid}
-                >
-                  −$1
-                </button>
-              </div>
-              <div
-                className="flex flex-col rounded-lg overflow-hidden border border-neutral-700"
-                title="Step by 1¢"
-              >
-                <button
-                  type="button"
-                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={() => stepCurrentBalance(0.01)}
-                  disabled={!balanceValid}
-                >
-                  +1¢
-                </button>
-                <button
-                  type="button"
-                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={() => stepCurrentBalance(-0.01)}
-                  disabled={!balanceValid}
-                >
-                  −1¢
-                </button>
-              </div>
-            </div>
-          )}
-          {!isLoadingRemote && !balanceSyntaxValid && (
-            <p className="text-xs text-red-400">
-              Enter a non-negative number, e.g. 34 or 45.56.
-            </p>
-          )}
-          {!isLoadingRemote &&
-            balanceSyntaxValid &&
-            balanceExceedsPrincipal && (
-              <p className="text-xs text-red-400">
-                Current balance cannot exceed the original principal.
-              </p>
-            )}
-        </label>
-      )}
-
-      {!editMode && (
-        <div className="space-y-1">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="flex-1 rounded-lg border border-emerald-500/50 bg-emerald-500/20 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-500/30 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-500/20"
-              onClick={saveMortgageInputs}
-              disabled={!inputsValid}
-              title={
-                inputsValid
-                  ? "Persist the current principal and balance to localStorage so they reload next time."
-                  : "Fix the invalid input(s) above before saving."
-              }
-            >
-              Save
-            </button>
-            <button
-              type="button"
-              className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 transition"
-              onClick={resetMortgageInputs}
-              title="Restore the values to whatever was loaded when the app started. Does not modify localStorage."
-            >
-              Reset
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Progress bar */}
+      {/* Progress bar (placed above the mortgage inputs to match the
+          mobile layout). */}
       {!editMode && (
         <div className="relative h-5 rounded-full bg-neutral-800 overflow-hidden">
           <div
@@ -285,6 +145,58 @@ export function DesktopControlPanel({
           >
             {(progress * 100).toFixed(2)}%
           </div>
+        </div>
+      )}
+
+      {/* Mortgage inputs: shared component with the mobile panel. The only
+          difference is `editable={true}`, which swaps the read-only display
+          spans for actual <input>s so the user can type into the principal
+          and balance fields. The +/- step buttons and card layout are
+          identical across both modes. */}
+      {!editMode && (
+        <MortgageInputs
+          editable
+          originalPrincipalText={originalPrincipalText}
+          currentBalanceText={currentBalanceText}
+          principalValid={principalValid}
+          balanceValid={balanceValid}
+          balanceSyntaxValid={balanceSyntaxValid}
+          balanceExceedsPrincipal={balanceExceedsPrincipal}
+          setOriginalPrincipalText={setOriginalPrincipalText}
+          setCurrentBalanceText={setCurrentBalanceText}
+          commitPrincipalText={commitPrincipalText}
+          commitBalanceText={commitBalanceText}
+          stepCurrentBalance={stepCurrentBalance}
+          isLoadingRemote={isLoadingRemote}
+        />
+      )}
+
+      {/* Save / Reset row (matches the mobile button styling). "Fit route"
+          stays inside the Route panel below, so this row only carries the
+          two persistence actions. */}
+      {!editMode && (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="flex-1 rounded-lg border border-emerald-500/50 bg-emerald-500/20 px-2 py-1.5 text-xs text-emerald-100 hover:bg-emerald-500/30 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-500/20"
+            onClick={saveMortgageInputs}
+            disabled={!inputsValid}
+            title={
+              inputsValid
+                ? "Persist the current principal and balance to localStorage so they reload next time."
+                : "Fix the invalid input(s) above before saving."
+            }
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 transition"
+            onClick={resetMortgageInputs}
+            title="Restore the values to whatever was loaded when the app started. Does not modify localStorage."
+          >
+            Reset
+          </button>
         </div>
       )}
 
