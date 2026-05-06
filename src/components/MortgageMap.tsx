@@ -878,15 +878,14 @@ export default function JiuXiangMortgageMap() {
         ) : (
           <MobileControlPanel
             apiKey={GOOGLE_MAPS_API_KEY}
-            destinationName={destinationName}
             originalPrincipalText={originalPrincipalText}
             currentBalanceText={currentBalanceText}
-            principalValid={principalValid}
             balanceValid={balanceValid}
             balanceExceedsPrincipal={balanceExceedsPrincipal}
-            setOriginalPrincipalText={setOriginalPrincipalText}
-            setCurrentBalanceText={setCurrentBalanceText}
             stepCurrentBalance={stepCurrentBalance}
+            inputsValid={inputsValid}
+            saveMortgageInputs={saveMortgageInputs}
+            resetMortgageInputs={resetMortgageInputs}
             progress={progress}
             totalKm={totalKm}
             traveledKm={traveledKm}

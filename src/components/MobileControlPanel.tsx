@@ -3,17 +3,16 @@ import { formatCurrencyCents, isApiKeyConfigured } from "../utils/helper";
 
 type MobileControlPanelProps = {
   apiKey: string;
-  destinationName: string;
 
-  // Mortgage inputs (read-only on mobile; adjusted via step buttons).
+  // Mortgage values (display-only on mobile; balance adjusted via step buttons).
   originalPrincipalText: string;
   currentBalanceText: string;
-  principalValid: boolean;
   balanceValid: boolean;
   balanceExceedsPrincipal: boolean;
-  setOriginalPrincipalText: (s: string) => void;
-  setCurrentBalanceText: (s: string) => void;
   stepCurrentBalance: (delta: number) => void;
+  inputsValid: boolean;
+  saveMortgageInputs: () => void;
+  resetMortgageInputs: () => void;
 
   // Stats.
   progress: number;
@@ -32,15 +31,14 @@ type MobileControlPanelProps = {
  */
 export function MobileControlPanel({
   apiKey,
-  destinationName,
   originalPrincipalText,
   currentBalanceText,
-  principalValid,
   balanceValid,
   balanceExceedsPrincipal,
-  setOriginalPrincipalText,
-  setCurrentBalanceText,
   stepCurrentBalance,
+  inputsValid,
+  saveMortgageInputs,
+  resetMortgageInputs,
   progress,
   totalKm,
   traveledKm,
@@ -51,16 +49,6 @@ export function MobileControlPanel({
 }: MobileControlPanelProps) {
   return (
     <section className="rounded-2xl bg-neutral-900 shadow-xl p-4 flex-1 min-h-0 overflow-y-auto flex flex-col gap-3">
-      <div className="shrink-0">
-        <h1 className="text-xl font-semibold">
-          Walking to {destinationName.split("·")[0].trim()}
-        </h1>
-        <p className="text-xs text-neutral-400 mt-1">
-          Turn your mortgage balance into a journey. Every bit of principal you
-          pay off brings you closer to the destination.
-        </p>
-      </div>
-
       {!isApiKeyConfigured(apiKey) && (
         <div className="shrink-0 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100 space-y-2">
           <p className="font-semibold">
@@ -81,13 +69,35 @@ export function MobileControlPanel({
       <MobileMortgageInputs
         originalPrincipalText={originalPrincipalText}
         currentBalanceText={currentBalanceText}
-        principalValid={principalValid}
         balanceValid={balanceValid}
         balanceExceedsPrincipal={balanceExceedsPrincipal}
-        setOriginalPrincipalText={setOriginalPrincipalText}
-        setCurrentBalanceText={setCurrentBalanceText}
         stepCurrentBalance={stepCurrentBalance}
       />
+
+      {/* Save / Reset — same behavior as the desktop panel. */}
+      <div className="shrink-0 flex gap-2">
+        <button
+          type="button"
+          className="flex-1 rounded-lg border border-emerald-500/50 bg-emerald-500/20 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-500/30 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-500/20"
+          onClick={saveMortgageInputs}
+          disabled={!inputsValid}
+          title={
+            inputsValid
+              ? "Persist the current principal and balance."
+              : "Fix the invalid input(s) above before saving."
+          }
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 transition"
+          onClick={resetMortgageInputs}
+          title="Restore the values to whatever was loaded when the app started."
+        >
+          Reset
+        </button>
+      </div>
 
       {/* Progress bar */}
       <div className="shrink-0 relative h-5 rounded-full bg-neutral-800 overflow-hidden">
