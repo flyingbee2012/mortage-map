@@ -49,7 +49,14 @@ function authHeaders(): HeadersInit {
 export async function loadFromGist(): Promise<MortgageGistData | null> {
   if (!isGistConfigured()) return null;
   try {
-    const res = await fetch(GIST_API_URL, { headers: authHeaders() });
+    // `cache: "no-store"` bypasses the browser's HTTP cache. Without it,
+    // GitHub's `Cache-Control: private, max-age=60` header lets the browser
+    // return a stale gist body for up to a minute, so a save on one device
+    // wouldn't show up on another until the cache expired.
+    const res = await fetch(GIST_API_URL, {
+      headers: authHeaders(),
+      cache: "no-store",
+    });
     if (!res.ok) return null;
     const json = (await res.json()) as {
       files?: Record<string, { content?: string } | undefined>;
