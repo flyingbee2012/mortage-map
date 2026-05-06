@@ -18,6 +18,7 @@ type MobileMortgageInputsProps = {
   balanceValid: boolean;
   balanceExceedsPrincipal: boolean;
   stepCurrentBalance: (delta: number) => void;
+  isLoadingRemote: boolean;
 };
 
 const CURRENCY_FORMATTER = new Intl.NumberFormat("en-US", {
@@ -39,26 +40,44 @@ export function MobileMortgageInputs({
   balanceValid,
   balanceExceedsPrincipal,
   stepCurrentBalance,
+  isLoadingRemote,
 }: MobileMortgageInputsProps) {
   return (
     <div className="shrink-0 space-y-2">
-      {/* Row 1: principal + balance shown as read-only display cards. */}
+      {/* Row 1: principal + balance shown as read-only display cards.
+          While the initial gist load is in flight, each card shows an
+          animated shimmer in place of the value, so the loading state is
+          visible exactly where the value will appear. */}
       <div className="flex items-stretch gap-2">
         <div className="flex flex-1 min-w-0 flex-col rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
             Original
           </span>
-          <span className="truncate text-sm font-semibold tabular-nums text-neutral-100">
-            {formatAmount(originalPrincipalText)}
-          </span>
+          {isLoadingRemote ? (
+            <span
+              className="mt-0.5 h-4 w-24 animate-pulse rounded bg-neutral-700"
+              aria-label="Loading original principal"
+            />
+          ) : (
+            <span className="truncate text-sm font-semibold tabular-nums text-neutral-100">
+              {formatAmount(originalPrincipalText)}
+            </span>
+          )}
         </div>
         <div className="flex flex-1 min-w-0 flex-col rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
             Current
           </span>
-          <span className="truncate text-sm font-semibold tabular-nums text-emerald-300">
-            {formatAmount(currentBalanceText)}
-          </span>
+          {isLoadingRemote ? (
+            <span
+              className="mt-0.5 h-4 w-24 animate-pulse rounded bg-neutral-700"
+              aria-label="Loading current balance"
+            />
+          ) : (
+            <span className="truncate text-sm font-semibold tabular-nums text-emerald-300">
+              {formatAmount(currentBalanceText)}
+            </span>
+          )}
         </div>
       </div>
       {/* Row 2: 4 step buttons in a single horizontal row */}

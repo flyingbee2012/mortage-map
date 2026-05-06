@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import { CheckpointNameInput } from "./CheckpointNameInput";
+import { SkeletonInput } from "./SkeletonInput";
 import {
   Checkpoint,
   formatCurrencyCents,
@@ -50,6 +51,7 @@ type DesktopControlPanelProps = {
   fitMapToRoute: () => void;
   exportRouteJson: () => void;
   resetRoute: () => void;
+  isLoadingRemote: boolean;
 };
 
 /**
@@ -95,6 +97,7 @@ export function DesktopControlPanel({
   fitMapToRoute,
   exportRouteJson,
   resetRoute,
+  isLoadingRemote,
 }: DesktopControlPanelProps) {
   return (
     <section className="rounded-2xl bg-neutral-900 shadow-xl p-4 flex-none w-[380px] h-full flex flex-col gap-3">
@@ -131,23 +134,27 @@ export function DesktopControlPanel({
       {!editMode && (
         <label className="space-y-1">
           <span className="text-sm text-neutral-300">Original principal</span>
-          <input
-            className={`w-full rounded-xl bg-neutral-800 border px-3 py-1.5 outline-none ${
-              principalValid
-                ? "border-neutral-700"
-                : "border-red-500/70 focus:border-red-400"
-            }`}
-            type="text"
-            inputMode="decimal"
-            value={originalPrincipalText}
-            aria-invalid={!principalValid}
-            onChange={(e) => setOriginalPrincipalText(e.target.value)}
-            onBlur={commitPrincipalText}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-            }}
-          />
-          {!principalValid && (
+          {isLoadingRemote ? (
+            <SkeletonInput label="Loading original principal" />
+          ) : (
+            <input
+              className={`w-full rounded-xl bg-neutral-800 border px-3 py-1.5 outline-none ${
+                principalValid
+                  ? "border-neutral-700"
+                  : "border-red-500/70 focus:border-red-400"
+              }`}
+              type="text"
+              inputMode="decimal"
+              value={originalPrincipalText}
+              aria-invalid={!principalValid}
+              onChange={(e) => setOriginalPrincipalText(e.target.value)}
+              onBlur={commitPrincipalText}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              }}
+            />
+          )}
+          {!isLoadingRemote && !principalValid && (
             <p className="text-xs text-red-400">
               Enter a non-negative number, e.g. 34 or 45.56.
             </p>
@@ -158,76 +165,82 @@ export function DesktopControlPanel({
       {!editMode && (
         <label className="space-y-1">
           <span className="text-sm text-neutral-300">Current balance</span>
-          <div className="flex items-stretch gap-2">
-            <input
-              className={`flex-1 min-w-0 rounded-xl bg-neutral-800 border px-3 py-1.5 outline-none ${
-                balanceValid
-                  ? "border-neutral-700"
-                  : "border-red-500/70 focus:border-red-400"
-              }`}
-              type="text"
-              inputMode="decimal"
-              value={currentBalanceText}
-              aria-invalid={!balanceValid}
-              onChange={(e) => setCurrentBalanceText(e.target.value)}
-              onBlur={commitBalanceText}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-              }}
-            />
-            <div
-              className="flex flex-col rounded-lg overflow-hidden border border-neutral-700"
-              title="Step by $1"
-            >
-              <button
-                type="button"
-                className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                onClick={() => stepCurrentBalance(1)}
-                disabled={!balanceValid}
+          {isLoadingRemote ? (
+            <SkeletonInput label="Loading current balance" />
+          ) : (
+            <div className="flex items-stretch gap-2">
+              <input
+                className={`flex-1 min-w-0 rounded-xl bg-neutral-800 border px-3 py-1.5 outline-none ${
+                  balanceValid
+                    ? "border-neutral-700"
+                    : "border-red-500/70 focus:border-red-400"
+                }`}
+                type="text"
+                inputMode="decimal"
+                value={currentBalanceText}
+                aria-invalid={!balanceValid}
+                onChange={(e) => setCurrentBalanceText(e.target.value)}
+                onBlur={commitBalanceText}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                }}
+              />
+              <div
+                className="flex flex-col rounded-lg overflow-hidden border border-neutral-700"
+                title="Step by $1"
               >
-                +$1
-              </button>
-              <button
-                type="button"
-                className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                onClick={() => stepCurrentBalance(-1)}
-                disabled={!balanceValid}
+                <button
+                  type="button"
+                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => stepCurrentBalance(1)}
+                  disabled={!balanceValid}
+                >
+                  +$1
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => stepCurrentBalance(-1)}
+                  disabled={!balanceValid}
+                >
+                  −$1
+                </button>
+              </div>
+              <div
+                className="flex flex-col rounded-lg overflow-hidden border border-neutral-700"
+                title="Step by 1¢"
               >
-                −$1
-              </button>
+                <button
+                  type="button"
+                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => stepCurrentBalance(0.01)}
+                  disabled={!balanceValid}
+                >
+                  +1¢
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={() => stepCurrentBalance(-0.01)}
+                  disabled={!balanceValid}
+                >
+                  −1¢
+                </button>
+              </div>
             </div>
-            <div
-              className="flex flex-col rounded-lg overflow-hidden border border-neutral-700"
-              title="Step by 1¢"
-            >
-              <button
-                type="button"
-                className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                onClick={() => stepCurrentBalance(0.01)}
-                disabled={!balanceValid}
-              >
-                +1¢
-              </button>
-              <button
-                type="button"
-                className="flex-1 px-2 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-t border-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                onClick={() => stepCurrentBalance(-0.01)}
-                disabled={!balanceValid}
-              >
-                −1¢
-              </button>
-            </div>
-          </div>
-          {!balanceSyntaxValid && (
+          )}
+          {!isLoadingRemote && !balanceSyntaxValid && (
             <p className="text-xs text-red-400">
               Enter a non-negative number, e.g. 34 or 45.56.
             </p>
           )}
-          {balanceSyntaxValid && balanceExceedsPrincipal && (
-            <p className="text-xs text-red-400">
-              Current balance cannot exceed the original principal.
-            </p>
-          )}
+          {!isLoadingRemote &&
+            balanceSyntaxValid &&
+            balanceExceedsPrincipal && (
+              <p className="text-xs text-red-400">
+                Current balance cannot exceed the original principal.
+              </p>
+            )}
         </label>
       )}
 

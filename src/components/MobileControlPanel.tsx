@@ -24,6 +24,7 @@ type MobileControlPanelProps = {
   paidPrincipal: number;
   safeOriginalPrincipal: number;
   currentSegment: string;
+  isLoadingRemote: boolean;
 };
 
 /**
@@ -50,6 +51,7 @@ export function MobileControlPanel({
   paidPrincipal,
   safeOriginalPrincipal,
   currentSegment,
+  isLoadingRemote,
 }: MobileControlPanelProps) {
   return (
     <section className="rounded-2xl bg-neutral-900 shadow-xl p-4 flex-1 min-h-0 overflow-y-auto flex flex-col gap-3">
@@ -90,6 +92,7 @@ export function MobileControlPanel({
         balanceValid={balanceValid}
         balanceExceedsPrincipal={balanceExceedsPrincipal}
         stepCurrentBalance={stepCurrentBalance}
+        isLoadingRemote={isLoadingRemote}
       />
 
       {/* Save / Reset / Fit route / Locate — single row of map + persistence actions. */}

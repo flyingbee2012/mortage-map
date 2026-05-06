@@ -261,6 +261,14 @@ export default function JiuXiangMortgageMap() {
     message: string;
   }>(null);
   const savedFlashTimerRef = useRef<number | null>(null);
+  // True from app start until the initial gist load resolves (success or
+  // failure). Used to show a "Syncing from cloud…" banner and dim the
+  // mortgage value displays so users know the values they're seeing may
+  // still get replaced by a fresher remote copy. Defaults to false when
+  // the gist isn't configured — there's nothing to wait for.
+  const [isLoadingRemote, setIsLoadingRemote] = useState<boolean>(() =>
+    isGistConfigured(),
+  );
   const showFlash = (
     kind: "synced" | "local-only" | "loaded",
     message: string,
@@ -284,27 +292,31 @@ export default function JiuXiangMortgageMap() {
     if (!isGistConfigured()) return;
     let cancelled = false;
     (async () => {
-      const remote = await loadFromGist();
-      if (cancelled || !remote) return;
-      // Adopt the remote values as the new "committed" state, mirror them
-      // into localStorage as a cache, and update the Reset/save baselines
-      // so a subsequent Save is a no-op unless the user actually changes
-      // something.
-      setOriginalPrincipal(remote.originalPrincipal);
-      setCurrentBalance(remote.currentBalance);
-      setOriginalPrincipalText(String(remote.originalPrincipal));
-      setCurrentBalanceText(String(remote.currentBalance));
-      saveStoredNumber(
-        ORIGINAL_PRINCIPAL_STORAGE_KEY,
-        remote.originalPrincipal,
-      );
-      saveStoredNumber(CURRENT_BALANCE_STORAGE_KEY, remote.currentBalance);
-      lastSavedPrincipalRef.current = remote.originalPrincipal;
-      lastSavedBalanceRef.current = remote.currentBalance;
-      initialPrincipalRef.current = remote.originalPrincipal;
-      initialBalanceRef.current = remote.currentBalance;
-      // Only flash if the remote actually differed from what was loaded
-      // from localStorage on startup, otherwise it's a no-op.
+      try {
+        const remote = await loadFromGist();
+        if (cancelled || !remote) return;
+        // Adopt the remote values as the new "committed" state, mirror them
+        // into localStorage as a cache, and update the Reset/save baselines
+        // so a subsequent Save is a no-op unless the user actually changes
+        // something.
+        setOriginalPrincipal(remote.originalPrincipal);
+        setCurrentBalance(remote.currentBalance);
+        setOriginalPrincipalText(String(remote.originalPrincipal));
+        setCurrentBalanceText(String(remote.currentBalance));
+        saveStoredNumber(
+          ORIGINAL_PRINCIPAL_STORAGE_KEY,
+          remote.originalPrincipal,
+        );
+        saveStoredNumber(CURRENT_BALANCE_STORAGE_KEY, remote.currentBalance);
+        lastSavedPrincipalRef.current = remote.originalPrincipal;
+        lastSavedBalanceRef.current = remote.currentBalance;
+        initialPrincipalRef.current = remote.originalPrincipal;
+        initialBalanceRef.current = remote.currentBalance;
+        // Only flash if the remote actually differed from what was loaded
+        // from localStorage on startup, otherwise it's a no-op.
+      } finally {
+        if (!cancelled) setIsLoadingRemote(false);
+      }
     })();
     return () => {
       cancelled = true;
@@ -884,6 +896,7 @@ export default function JiuXiangMortgageMap() {
             fitMapToRoute={fitMapToRoute}
             exportRouteJson={exportRouteJson}
             resetRoute={resetRoute}
+            isLoadingRemote={isLoadingRemote}
           />
         ) : (
           <MobileControlPanel
@@ -905,6 +918,7 @@ export default function JiuXiangMortgageMap() {
             paidPrincipal={paidPrincipal}
             safeOriginalPrincipal={safeOriginalPrincipal}
             currentSegment={currentSegment}
+            isLoadingRemote={isLoadingRemote}
           />
         )}
       </div>
