@@ -27,6 +27,16 @@ const GIST_API_URL = `https://api.github.com/gists/${GIST_ID}`;
 export type MortgageGistData = {
   originalPrincipal: number;
   currentBalance: number;
+  /**
+   * Optional opaque "refresh signal" for the stored route. When this value
+   * changes (or appears for the first time after being absent), each client
+   * clears its locally-stored route on next load so the bundled default
+   * route takes over. The value itself is never interpreted — only
+   * compared against the last token the client acted on. To force all
+   * clients to refresh, edit the gist and set this to any new string
+   * (e.g. a date or a counter). To stop forcing refreshes, leave it alone.
+   */
+  routeRefreshToken?: string;
 };
 
 export function isGistConfigured(): boolean {
@@ -73,6 +83,10 @@ export async function loadFromGist(): Promise<MortgageGistData | null> {
     return {
       originalPrincipal: parsed.originalPrincipal,
       currentBalance: parsed.currentBalance,
+      routeRefreshToken:
+        typeof parsed.routeRefreshToken === "string"
+          ? parsed.routeRefreshToken
+          : undefined,
     };
   } catch {
     return null;
@@ -87,10 +101,21 @@ export async function loadFromGist(): Promise<MortgageGistData | null> {
 export async function saveToGist(data: MortgageGistData): Promise<boolean> {
   if (!isGistConfigured()) return false;
   try {
+    // Strip undefined fields so we don't write `"routeRefreshToken": null`
+    // (or similar) into the gist when the caller doesn't have a token to
+    // preserve. Anything the caller passes through (incl. a token they
+    // loaded from a previous fetch) is written verbatim.
+    const payload: Record<string, unknown> = {
+      originalPrincipal: data.originalPrincipal,
+      currentBalance: data.currentBalance,
+    };
+    if (typeof data.routeRefreshToken === "string") {
+      payload.routeRefreshToken = data.routeRefreshToken;
+    }
     const body = {
       files: {
         [GIST_FILENAME]: {
-          content: JSON.stringify(data, null, 2) + "\n",
+          content: JSON.stringify(payload, null, 2) + "\n",
         },
       },
     };

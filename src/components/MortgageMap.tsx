@@ -39,6 +39,11 @@ const GOOGLE_MAPS_API_KEY: string =
   (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined) ?? "";
 const ORIGINAL_PRINCIPAL_STORAGE_KEY = "mortgageMap.originalPrincipal.v1";
 const CURRENT_BALANCE_STORAGE_KEY = "mortgageMap.currentBalance.v1";
+// Stores the last `routeRefreshToken` value this client honored from the
+// gist. When the remote token differs from this, the client clears its
+// stored route on next load so the bundled defaultRoute.json wins again.
+// See the gist-load effect for the comparison logic.
+const ROUTE_REFRESH_TOKEN_STORAGE_KEY = "mortgageMap.routeRefreshToken.v1";
 
 const DEFAULT_ROUTE: Checkpoint[] = defaultRouteJson as Checkpoint[];
 
@@ -172,32 +177,9 @@ export default function JiuXiangMortgageMap() {
   const [selectedCheckpointIndex, setSelectedCheckpointIndex] = useState<
     number | null
   >(null);
-  const [route, setRoute] = useState<Checkpoint[]>(() => {
-    // Mobile safety hatch: the mobile UI doesn't expose a "Reset route to
-    // default" button, so a stored route in localStorage will keep winning
-    // forever — even after we ship a new defaultRoute.json. To give mobile
-    // users a periodic chance to pick up route updates, we count how many
-    // times the app has been opened on a mobile viewport, and every 10th
-    // load we clear the stored route so the JSON default takes over for
-    // that session (and gets re-saved on the next render via the
-    // saveStoredRoute effect).
-    //
-    // Desktop is unaffected — users there have an explicit "Reset to
-    // default" button in the edit-route flow.
-    if (
-      typeof window !== "undefined" &&
-      !window.matchMedia("(min-width: 1024px)").matches
-    ) {
-      const COUNTER_KEY = "mortgageMap.mobileLoadCount.v1";
-      const prev = Number(window.localStorage.getItem(COUNTER_KEY) ?? "0") || 0;
-      const next = prev + 1;
-      window.localStorage.setItem(COUNTER_KEY, String(next));
-      if (next % 10 === 0) {
-        clearStoredRoute();
-      }
-    }
-    return loadStoredRoute() ?? DEFAULT_ROUTE;
-  });
+  const [route, setRoute] = useState<Checkpoint[]>(
+    () => loadStoredRoute() ?? DEFAULT_ROUTE,
+  );
   // Snapshot of the route taken when edit mode begins, so Cancel can revert.
   const editSnapshotRef = useRef<Checkpoint[] | null>(null);
   // Ref to the currently selected list item, so we can scroll it into view
@@ -276,6 +258,12 @@ export default function JiuXiangMortgageMap() {
   // changed since the previous save / initial load.
   const lastSavedPrincipalRef = useRef<number>(initialPrincipalRef.current);
   const lastSavedBalanceRef = useRef<number>(initialBalanceRef.current);
+  // Latest `routeRefreshToken` we observed in the gist. Held in a ref so
+  // saveToGist can echo it back unchanged — if we omitted it, every save
+  // would silently strip the signal from the gist and break the next
+  // refresh. Undefined until the first successful gist load (or forever
+  // if the gist isn't configured / has no token field).
+  const remoteRouteRefreshTokenRef = useRef<string | undefined>(undefined);
   // Transient "Saved" message shown next to the Save button. Cleared after
   // ~2s. The timer ref lets a rapid second Save reset the countdown without
   // stacking timeouts.
@@ -335,6 +323,26 @@ export default function JiuXiangMortgageMap() {
         lastSavedBalanceRef.current = remote.currentBalance;
         initialPrincipalRef.current = remote.originalPrincipal;
         initialBalanceRef.current = remote.currentBalance;
+        // Route refresh signal: if the gist carries a token and it differs
+        // from the one this client last honored, wipe the locally stored
+        // route so the bundled defaultRoute.json takes over on this load,
+        // then remember the new token so we don't keep wiping on every
+        // refresh. Absence of a token in the gist means "no signal" and
+        // is left untouched. See ROUTE_REFRESH_TOKEN_STORAGE_KEY.
+        remoteRouteRefreshTokenRef.current = remote.routeRefreshToken;
+        if (typeof remote.routeRefreshToken === "string") {
+          const lastHonored = window.localStorage.getItem(
+            ROUTE_REFRESH_TOKEN_STORAGE_KEY,
+          );
+          if (lastHonored !== remote.routeRefreshToken) {
+            clearStoredRoute();
+            setRoute(DEFAULT_ROUTE);
+            window.localStorage.setItem(
+              ROUTE_REFRESH_TOKEN_STORAGE_KEY,
+              remote.routeRefreshToken,
+            );
+          }
+        }
         // Only flash if the remote actually differed from what was loaded
         // from localStorage on startup, otherwise it's a no-op.
       } finally {
@@ -371,6 +379,9 @@ export default function JiuXiangMortgageMap() {
     void saveToGist({
       originalPrincipal,
       currentBalance,
+      // Echo back whatever token the gist currently has so we don't strip
+      // the refresh signal on save. Undefined when no token is present.
+      routeRefreshToken: remoteRouteRefreshTokenRef.current,
     }).then((ok) => {
       if (ok) {
         showFlash("synced", "✓ Saved & synced to cloud");
