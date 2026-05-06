@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import defaultRouteJson from "../data/defaultRoute.json";
 import { DesktopControlPanel } from "./DesktopControlPanel";
 import { MobileControlPanel } from "./MobileControlPanel";
 import { MapView } from "./MapView";
@@ -45,7 +44,22 @@ const CURRENT_BALANCE_STORAGE_KEY = "mortgageMap.currentBalance.v1";
 // See the gist-load effect for the comparison logic.
 const ROUTE_REFRESH_TOKEN_STORAGE_KEY = "mortgageMap.routeRefreshToken.v1";
 
-const DEFAULT_ROUTE: Checkpoint[] = defaultRouteJson as Checkpoint[];
+// Lazy loader for the bundled default route. The JSON is only needed when:
+//   1. localStorage has no stored route (first run / cleared storage)
+//   2. the gist's routeRefreshToken changed and we wipe the stored route
+//   3. the user clicks "Reset to default" in the desktop edit-route flow
+// Splitting it into its own chunk via dynamic import() keeps it out of the
+// initial bundle for returning users, who almost always have a stored route.
+// The promise is memoized so concurrent callers share a single fetch.
+let defaultRoutePromise: Promise<Checkpoint[]> | null = null;
+function loadDefaultRoute(): Promise<Checkpoint[]> {
+  if (defaultRoutePromise === null) {
+    defaultRoutePromise = import("../data/defaultRoute.json").then(
+      (mod) => mod.default as Checkpoint[],
+    );
+  }
+  return defaultRoutePromise;
+}
 
 export default function JiuXiangMortgageMap() {
   const mapRef = useRef<HTMLDivElement | null>(null);
@@ -178,8 +192,24 @@ export default function JiuXiangMortgageMap() {
     number | null
   >(null);
   const [route, setRoute] = useState<Checkpoint[]>(
-    () => loadStoredRoute() ?? DEFAULT_ROUTE,
+    () => loadStoredRoute() ?? [],
   );
+  // First-run / cleared-storage bootstrap: when the initial route came back
+  // empty (no stored route), fetch the bundled default lazily and adopt it.
+  // Stored-route users skip this entirely — the JSON chunk is never loaded.
+  useEffect(() => {
+    if (route.length > 0) return;
+    let cancelled = false;
+    loadDefaultRoute().then((def) => {
+      if (cancelled) return;
+      setRoute(def);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Only runs once on mount; subsequent route changes shouldn't re-trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Snapshot of the route taken when edit mode begins, so Cancel can revert.
   const editSnapshotRef = useRef<Checkpoint[] | null>(null);
   // Ref to the currently selected list item, so we can scroll it into view
@@ -336,7 +366,9 @@ export default function JiuXiangMortgageMap() {
           );
           if (lastHonored !== remote.routeRefreshToken) {
             clearStoredRoute();
-            setRoute(DEFAULT_ROUTE);
+            const def = await loadDefaultRoute();
+            if (cancelled) return;
+            setRoute(def);
             window.localStorage.setItem(
               ROUTE_REFRESH_TOKEN_STORAGE_KEY,
               remote.routeRefreshToken,
@@ -851,7 +883,7 @@ export default function JiuXiangMortgageMap() {
       )
     ) {
       clearStoredRoute();
-      setRoute(DEFAULT_ROUTE);
+      loadDefaultRoute().then((def) => setRoute(def));
     }
   };
   const fitMapToRoute = () => {
