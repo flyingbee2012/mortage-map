@@ -396,6 +396,10 @@ export default function JiuXiangMortgageMap() {
       // Nothing changed since the last save / initial load — no-op.
       return;
     }
+    // Confirm with the user before persisting. Save writes to localStorage
+    // and (if configured) the shared gist, so a misclick can clobber the
+    // previously-good values across all devices.
+    if (!window.confirm("Save the current mortgage values?")) return;
     saveStoredNumber(ORIGINAL_PRINCIPAL_STORAGE_KEY, originalPrincipal);
     saveStoredNumber(CURRENT_BALANCE_STORAGE_KEY, currentBalance);
     lastSavedPrincipalRef.current = originalPrincipal;
