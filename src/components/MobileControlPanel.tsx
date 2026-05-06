@@ -114,46 +114,33 @@ export function MobileControlPanel({
       </div>
 
       {/* Stats card */}
-      <div className="shrink-0 rounded-2xl bg-neutral-800 p-3 space-y-3 text-sm">
-        <div className="space-y-1">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-            Distance
-          </h3>
-          <p>
-            Total: <strong>{totalKm.toFixed(4)} km</strong>
-            <span className="mx-2 text-neutral-500">·</span>
-            Traveled: <strong>{traveledKm.toFixed(4)} km</strong>
-          </p>
-          <p>
-            Remaining: <strong>{remainingKm.toFixed(4)} km</strong>
-          </p>
-        </div>
+      <div className="shrink-0 rounded-2xl bg-neutral-800 p-3 space-y-2 text-sm">
+        <p>
+          Total: <strong>{totalKm.toFixed(4)} km</strong>
+          <span className="mx-2 text-neutral-500">·</span>
+          Traveled: <strong>{traveledKm.toFixed(4)} km</strong>
+        </p>
+        <p>
+          Remaining: <strong>{remainingKm.toFixed(4)} km</strong>
+        </p>
 
-        <div className="space-y-1">
-          <div className="flex items-baseline gap-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-              Money
-            </h3>
-            <span>
-              Paid off: <strong>{formatCurrencyCents(paidPrincipal)}</strong>
-            </span>
-          </div>
-          <p>
-            Each $1 paid moves you{" "}
+        <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span>
+            Paid off: <strong>{formatCurrencyCents(paidPrincipal)}</strong>
+          </span>
+          <span className="text-neutral-300">
+            $1 ={" "}
             <strong>
               {safeOriginalPrincipal > 0
                 ? ((totalKm * 1000) / safeOriginalPrincipal).toFixed(2)
                 : "0.00"}{" "}
               m
             </strong>
-          </p>
-        </div>
-
-        <div className="space-y-1">
-          <p>
-            Currently at: <strong>{currentSegment}</strong>
-          </p>
-        </div>
+          </span>
+        </p>
+        <p>
+          Currently at: <strong>{currentSegment}</strong>
+        </p>
       </div>
     </section>
   );
