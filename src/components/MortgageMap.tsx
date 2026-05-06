@@ -17,6 +17,7 @@ import {
   saveStoredRoute,
   clearStoredRoute,
 } from "../utils/helper";
+import { isGistConfigured, loadFromGist, saveToGist } from "../utils/gistStore";
 
 /**
  * Jiuxiang Mortgage Journey Demo
@@ -255,8 +256,62 @@ export default function JiuXiangMortgageMap() {
   // Transient "Saved" message shown next to the Save button. Cleared after
   // ~2s. The timer ref lets a rapid second Save reset the countdown without
   // stacking timeouts.
-  const [savedFlash, setSavedFlash] = useState(false);
+  const [savedFlash, setSavedFlash] = useState<null | {
+    kind: "synced" | "local-only" | "loaded";
+    message: string;
+  }>(null);
   const savedFlashTimerRef = useRef<number | null>(null);
+  const showFlash = (
+    kind: "synced" | "local-only" | "loaded",
+    message: string,
+  ) => {
+    setSavedFlash({ kind, message });
+    if (savedFlashTimerRef.current !== null) {
+      window.clearTimeout(savedFlashTimerRef.current);
+    }
+    savedFlashTimerRef.current = window.setTimeout(() => {
+      setSavedFlash(null);
+      savedFlashTimerRef.current = null;
+    }, 2500);
+  };
+
+  // On mount: try to pull the latest mortgage values from the shared gist
+  // so that changes made on another device (e.g. desktop save → iPhone
+  // refresh) are reflected here. Falls through silently if the gist is
+  // not configured or the network call fails — localStorage values loaded
+  // synchronously above remain in effect as the offline fallback.
+  useEffect(() => {
+    if (!isGistConfigured()) return;
+    let cancelled = false;
+    (async () => {
+      const remote = await loadFromGist();
+      if (cancelled || !remote) return;
+      // Adopt the remote values as the new "committed" state, mirror them
+      // into localStorage as a cache, and update the Reset/save baselines
+      // so a subsequent Save is a no-op unless the user actually changes
+      // something.
+      setOriginalPrincipal(remote.originalPrincipal);
+      setCurrentBalance(remote.currentBalance);
+      setOriginalPrincipalText(String(remote.originalPrincipal));
+      setCurrentBalanceText(String(remote.currentBalance));
+      saveStoredNumber(
+        ORIGINAL_PRINCIPAL_STORAGE_KEY,
+        remote.originalPrincipal,
+      );
+      saveStoredNumber(CURRENT_BALANCE_STORAGE_KEY, remote.currentBalance);
+      lastSavedPrincipalRef.current = remote.originalPrincipal;
+      lastSavedBalanceRef.current = remote.currentBalance;
+      initialPrincipalRef.current = remote.originalPrincipal;
+      initialBalanceRef.current = remote.currentBalance;
+      // Only flash if the remote actually differed from what was loaded
+      // from localStorage on startup, otherwise it's a no-op.
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const saveMortgageInputs = () => {
     if (!inputsValid) return;
     if (
@@ -270,14 +325,24 @@ export default function JiuXiangMortgageMap() {
     saveStoredNumber(CURRENT_BALANCE_STORAGE_KEY, currentBalance);
     lastSavedPrincipalRef.current = originalPrincipal;
     lastSavedBalanceRef.current = currentBalance;
-    setSavedFlash(true);
-    if (savedFlashTimerRef.current !== null) {
-      window.clearTimeout(savedFlashTimerRef.current);
+    // Optimistically show the local-save toast immediately, then upgrade or
+    // downgrade it once the gist write resolves. If the gist isn't
+    // configured at all, just show "Saved locally".
+    if (!isGistConfigured()) {
+      showFlash("local-only", "✓ Saved locally");
+      return;
     }
-    savedFlashTimerRef.current = window.setTimeout(() => {
-      setSavedFlash(false);
-      savedFlashTimerRef.current = null;
-    }, 2000);
+    showFlash("synced", "Saving…");
+    void saveToGist({
+      originalPrincipal,
+      currentBalance,
+    }).then((ok) => {
+      if (ok) {
+        showFlash("synced", "✓ Saved & synced to cloud");
+      } else {
+        showFlash("local-only", "⚠ Saved locally only (cloud sync failed)");
+      }
+    });
   };
   const resetMortgageInputs = () => {
     setOriginalPrincipal(initialPrincipalRef.current);
@@ -751,11 +816,15 @@ export default function JiuXiangMortgageMap() {
       <div
         role="status"
         aria-live="polite"
-        className={`pointer-events-none fixed top-4 left-1/2 -translate-x-1/2 z-50 rounded-lg border border-emerald-400/60 bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white shadow-lg transition-all duration-300 ${
+        className={`pointer-events-none fixed top-4 left-1/2 -translate-x-1/2 z-50 rounded-lg border px-4 py-2 text-sm font-medium text-white shadow-lg transition-all duration-300 ${
+          savedFlash?.kind === "local-only"
+            ? "border-amber-400/60 bg-amber-500/90"
+            : "border-emerald-400/60 bg-emerald-500/90"
+        } ${
           savedFlash ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2"
         }`}
       >
-        ✓ Saved to local storage
+        {savedFlash?.message ?? ""}
       </div>
       {/*
         Outer responsive layout. `MapView` is rendered ONCE (outside the

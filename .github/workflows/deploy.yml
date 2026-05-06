@@ -34,6 +34,8 @@ jobs:
         run: npm run build
         env:
           VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
+          VITE_GIST_ID: ${{ secrets.VITE_GIST_ID }}
+          VITE_GIST_TOKEN: ${{ secrets.VITE_GIST_TOKEN }}
 
       - uses: actions/configure-pages@v4
 
