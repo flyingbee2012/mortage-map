@@ -172,9 +172,32 @@ export default function JiuXiangMortgageMap() {
   const [selectedCheckpointIndex, setSelectedCheckpointIndex] = useState<
     number | null
   >(null);
-  const [route, setRoute] = useState<Checkpoint[]>(
-    () => loadStoredRoute() ?? DEFAULT_ROUTE,
-  );
+  const [route, setRoute] = useState<Checkpoint[]>(() => {
+    // Mobile safety hatch: the mobile UI doesn't expose a "Reset route to
+    // default" button, so a stored route in localStorage will keep winning
+    // forever — even after we ship a new defaultRoute.json. To give mobile
+    // users a periodic chance to pick up route updates, we count how many
+    // times the app has been opened on a mobile viewport, and every 10th
+    // load we clear the stored route so the JSON default takes over for
+    // that session (and gets re-saved on the next render via the
+    // saveStoredRoute effect).
+    //
+    // Desktop is unaffected — users there have an explicit "Reset to
+    // default" button in the edit-route flow.
+    if (
+      typeof window !== "undefined" &&
+      !window.matchMedia("(min-width: 1024px)").matches
+    ) {
+      const COUNTER_KEY = "mortgageMap.mobileLoadCount.v1";
+      const prev = Number(window.localStorage.getItem(COUNTER_KEY) ?? "0") || 0;
+      const next = prev + 1;
+      window.localStorage.setItem(COUNTER_KEY, String(next));
+      if (next % 10 === 0) {
+        clearStoredRoute();
+      }
+    }
+    return loadStoredRoute() ?? DEFAULT_ROUTE;
+  });
   // Snapshot of the route taken when edit mode begins, so Cancel can revert.
   const editSnapshotRef = useRef<Checkpoint[] | null>(null);
   // Ref to the currently selected list item, so we can scroll it into view
