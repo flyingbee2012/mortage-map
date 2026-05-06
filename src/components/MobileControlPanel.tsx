@@ -13,6 +13,8 @@ type MobileControlPanelProps = {
   inputsValid: boolean;
   saveMortgageInputs: () => void;
   resetMortgageInputs: () => void;
+  fitMapToRoute: () => void;
+  focusCurrentPosition: () => void;
 
   // Stats.
   progress: number;
@@ -39,6 +41,8 @@ export function MobileControlPanel({
   inputsValid,
   saveMortgageInputs,
   resetMortgageInputs,
+  fitMapToRoute,
+  focusCurrentPosition,
   progress,
   totalKm,
   traveledKm,
@@ -66,39 +70,6 @@ export function MobileControlPanel({
         </div>
       )}
 
-      <MobileMortgageInputs
-        originalPrincipalText={originalPrincipalText}
-        currentBalanceText={currentBalanceText}
-        balanceValid={balanceValid}
-        balanceExceedsPrincipal={balanceExceedsPrincipal}
-        stepCurrentBalance={stepCurrentBalance}
-      />
-
-      {/* Save / Reset — same behavior as the desktop panel. */}
-      <div className="shrink-0 flex gap-2">
-        <button
-          type="button"
-          className="flex-1 rounded-lg border border-emerald-500/50 bg-emerald-500/20 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-500/30 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-500/20"
-          onClick={saveMortgageInputs}
-          disabled={!inputsValid}
-          title={
-            inputsValid
-              ? "Persist the current principal and balance."
-              : "Fix the invalid input(s) above before saving."
-          }
-        >
-          Save
-        </button>
-        <button
-          type="button"
-          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 transition"
-          onClick={resetMortgageInputs}
-          title="Restore the values to whatever was loaded when the app started."
-        >
-          Reset
-        </button>
-      </div>
-
       {/* Progress bar */}
       <div className="shrink-0 relative h-5 rounded-full bg-neutral-800 overflow-hidden">
         <div
@@ -111,6 +82,55 @@ export function MobileControlPanel({
         >
           {(progress * 100).toFixed(2)}%
         </div>
+      </div>
+
+      <MobileMortgageInputs
+        originalPrincipalText={originalPrincipalText}
+        currentBalanceText={currentBalanceText}
+        balanceValid={balanceValid}
+        balanceExceedsPrincipal={balanceExceedsPrincipal}
+        stepCurrentBalance={stepCurrentBalance}
+      />
+
+      {/* Save / Reset / Fit route / Locate — single row of map + persistence actions. */}
+      <div className="shrink-0 flex gap-2">
+        <button
+          type="button"
+          className="flex-1 rounded-lg border border-emerald-500/50 bg-emerald-500/20 px-2 py-1.5 text-xs text-emerald-100 hover:bg-emerald-500/30 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-500/20"
+          onClick={saveMortgageInputs}
+          disabled={!inputsValid}
+          title={
+            inputsValid
+              ? "Persist the current principal and balance."
+              : "Fix the invalid input(s) above before saving."
+          }
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 transition"
+          onClick={resetMortgageInputs}
+          title="Restore the values to whatever was loaded when the app started."
+        >
+          Reset
+        </button>
+        <button
+          type="button"
+          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 transition"
+          onClick={fitMapToRoute}
+          title="Zoom out to show the entire route."
+        >
+          Fit route
+        </button>
+        <button
+          type="button"
+          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 transition"
+          onClick={focusCurrentPosition}
+          title="Re-center the map on your current position."
+        >
+          Locate
+        </button>
       </div>
 
       {/* Stats card */}

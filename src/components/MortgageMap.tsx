@@ -798,6 +798,16 @@ export default function JiuXiangMortgageMap() {
     route.forEach((p) => bounds.extend(p));
     mapInstanceRef.current.fitBounds(bounds);
   };
+  // Re-center the map on the user's current position at neighborhood zoom
+  // (matches the initial-load framing). Used by the mobile "Locate" button.
+  const focusCurrentPosition = () => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    const target = currentPosition ?? (route.length > 0 ? route[0] : null);
+    if (!target) return;
+    map.panTo(target);
+    map.setZoom(15);
+  };
   const exportRouteJson = () => {
     const json = JSON.stringify(route, null, 2) + "\n";
     const blob = new Blob([json], { type: "application/json" });
@@ -886,6 +896,8 @@ export default function JiuXiangMortgageMap() {
             inputsValid={inputsValid}
             saveMortgageInputs={saveMortgageInputs}
             resetMortgageInputs={resetMortgageInputs}
+            fitMapToRoute={fitMapToRoute}
+            focusCurrentPosition={focusCurrentPosition}
             progress={progress}
             totalKm={totalKm}
             traveledKm={traveledKm}
