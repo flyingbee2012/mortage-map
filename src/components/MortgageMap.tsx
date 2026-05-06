@@ -833,7 +833,7 @@ export default function JiuXiangMortgageMap() {
         Tailwind's `order-first lg:order-last` puts the map on TOP in mobile
         (flex-col) and on the RIGHT on desktop (flex-row).
       */}
-      <div className="w-full h-full flex flex-col lg:flex-row gap-4">
+      <div className="w-full h-full flex flex-col lg:flex-row gap-2 lg:gap-4">
         <MapView mapRef={mapRef} mapError={mapError} />
         {isLargeScreen ? (
           <DesktopControlPanel
