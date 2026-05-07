@@ -188,6 +188,53 @@ export default function JiuXiangMortgageMap() {
     });
     return () => window.cancelAnimationFrame(id);
   }, [isLargeScreen, mapReady]);
+  // Pixels of the map currently hidden by the mobile bottom sheet (0 on
+  // desktop). The sheet reports its visible height here so all map
+  // recentering operations can offset their target to keep the point of
+  // interest in the visible (top) portion of the map instead of behind
+  // the sheet.
+  const [bottomOverlayPx, setBottomOverlayPx] = useState(0);
+  const bottomOverlayPxRef = useRef(0);
+  useEffect(() => {
+    bottomOverlayPxRef.current = bottomOverlayPx;
+  }, [bottomOverlayPx]);
+  // Pan the map so `target` lands at the visible (un-occluded) center.
+  // Implemented as panTo(target) + panBy(0, overlay/2): panBy with a
+  // positive y shifts the map's center DOWN, which renders the target
+  // higher on screen by overlay/2 pixels — exactly the offset needed to
+  // move it from the geometric center to the center of the area above
+  // the sheet.
+  const panMapToVisible = (
+    map: google.maps.Map,
+    target: google.maps.LatLngLiteral,
+  ) => {
+    map.panTo(target);
+    const overlay = bottomOverlayPxRef.current;
+    if (overlay > 0) map.panBy(0, overlay / 2);
+  };
+  // Approximate visible-bounds check: the geographical bounds returned by
+  // Google Maps cover the full map div, but the bottom `bottomOverlayPx`
+  // pixels are hidden by the sheet. We treat anything in that bottom band
+  // as out-of-view so auto-pan kicks in.
+  const isVisibleInMap = (
+    map: google.maps.Map,
+    target: google.maps.LatLngLiteral,
+  ): boolean => {
+    const bounds = map.getBounds();
+    if (!bounds) return false;
+    if (!bounds.contains(target)) return false;
+    const overlay = bottomOverlayPxRef.current;
+    if (overlay <= 0) return true;
+    const mapH = map.getDiv().offsetHeight;
+    if (mapH <= 0) return true;
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    // Linear approximation in latitude — fine for the small viewports
+    // and mid-latitudes this app is used at. Mercator distortion would
+    // only matter at extreme latitudes.
+    const visibleSouthLat = sw.lat() + (ne.lat() - sw.lat()) * (overlay / mapH);
+    return target.lat >= visibleSouthLat;
+  };
   const [selectedCheckpointIndex, setSelectedCheckpointIndex] = useState<
     number | null
   >(null);
@@ -251,9 +298,8 @@ export default function JiuXiangMortgageMap() {
     const cp = route[selectedCheckpointIndex];
     if (!cp) return;
     const target = { lat: cp.lat, lng: cp.lng };
-    const bounds = map.getBounds();
-    if (!bounds || !bounds.contains(target)) {
-      map.panTo(target);
+    if (!isVisibleInMap(map, target)) {
+      panMapToVisible(map, target);
     }
   }, [selectedCheckpointIndex, route]);
 
@@ -553,6 +599,48 @@ export default function JiuXiangMortgageMap() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Whenever the sheet's visible height changes (initial mount on mobile,
+  // user drag between snap points, rotation), shift the map by half the
+  // delta so whatever was centered in the visible area stays centered.
+  // Drags after the first measurement use this purely-geometric shift so
+  // we never fight the user's pan.
+  const prevOverlayPxRef = useRef(0);
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current) return;
+    const prev = prevOverlayPxRef.current;
+    const delta = bottomOverlayPx - prev;
+    prevOverlayPxRef.current = bottomOverlayPx;
+    if (delta === 0) return;
+    // Skip the very first non-zero overlay: the dedicated initial-focus
+    // effect below handles that case (it uses the same logic as the
+    // Locate button so the marker lands in the visible area, not just
+    // shifted by half the sheet height).
+    if (prev === 0 && bottomOverlayPx > 0) return;
+    mapInstanceRef.current.panBy(0, delta / 2);
+  }, [mapReady, bottomOverlayPx]);
+
+  // Initial focus on the user's current position once everything is ready.
+  // Hooks the map's `idle` event (fires after tiles + layout settle, AFTER
+  // any synchronous setCenter calls in other effects like the
+  // breakpoint-resize effect above), so our pan isn't immediately
+  // overridden. Runs at most once per mount; uses the same code path as
+  // the Locate button so the marker lands in the visible (un-occluded)
+  // area of the map regardless of how big the bottom sheet is.
+  const initialFocusDoneRef = useRef(false);
+  const focusCurrentPositionRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    if (initialFocusDoneRef.current) return;
+    if (!mapReady || !mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+    const listener = map.addListener("idle", () => {
+      if (initialFocusDoneRef.current) return;
+      initialFocusDoneRef.current = true;
+      focusCurrentPositionRef.current();
+      google.maps.event.removeListener(listener);
+    });
+    return () => google.maps.event.removeListener(listener);
+  }, [mapReady]);
+
   // Sync the polyline path whenever the route changes.
   useEffect(() => {
     if (!polylineRef.current) return;
@@ -851,10 +939,8 @@ export default function JiuXiangMortgageMap() {
     if (editMode || !currentPosition) return;
     if (justExitedEditMode) return;
     const map = mapInstanceRef.current;
-    const bounds = map.getBounds();
-    if (!bounds) return;
-    if (!bounds.contains(currentPosition)) {
-      map.panTo(currentPosition);
+    if (!isVisibleInMap(map, currentPosition)) {
+      panMapToVisible(map, currentPosition);
     }
   }, [currentPosition, editMode, mapReady]);
 
@@ -903,7 +989,13 @@ export default function JiuXiangMortgageMap() {
     if (!mapInstanceRef.current || route.length === 0) return;
     const bounds = new google.maps.LatLngBounds();
     route.forEach((p) => bounds.extend(p));
-    mapInstanceRef.current.fitBounds(bounds);
+    // Tell Google Maps about the sheet so the route is fit into the
+    // visible (top) portion of the map, not the full map div.
+    const overlay = bottomOverlayPxRef.current;
+    mapInstanceRef.current.fitBounds(
+      bounds,
+      overlay > 0 ? { top: 0, right: 0, bottom: overlay, left: 0 } : undefined,
+    );
   };
   // Re-center the map on the user's current position at neighborhood zoom
   // (matches the initial-load framing). Used by the mobile "Locate" button.
@@ -912,9 +1004,12 @@ export default function JiuXiangMortgageMap() {
     if (!map) return;
     const target = currentPosition ?? (route.length > 0 ? route[0] : null);
     if (!target) return;
-    map.panTo(target);
     map.setZoom(15);
+    panMapToVisible(map, target);
   };
+  // Keep the ref used by the initial-overlay effect pointing at the
+  // latest closure (so it sees the current `currentPosition` / `route`).
+  focusCurrentPositionRef.current = focusCurrentPosition;
   const exportRouteJson = () => {
     const json = JSON.stringify(route, null, 2) + "\n";
     const blob = new Blob([json], { type: "application/json" });
@@ -950,7 +1045,7 @@ export default function JiuXiangMortgageMap() {
         Tailwind's `order-first lg:order-last` puts the map on TOP in mobile
         (flex-col) and on the RIGHT on desktop (flex-row).
       */}
-      <div className="w-full h-full flex flex-col lg:flex-row gap-2 lg:gap-4">
+      <div className="w-full h-full relative lg:flex lg:flex-row lg:gap-4">
         <MapView mapRef={mapRef} mapError={mapError} />
         {isLargeScreen ? (
           <DesktopControlPanel
@@ -996,6 +1091,7 @@ export default function JiuXiangMortgageMap() {
         ) : (
           <MobileControlPanel
             apiKey={GOOGLE_MAPS_API_KEY}
+            onVisibleHeightChange={setBottomOverlayPx}
             originalPrincipalText={originalPrincipalText}
             currentBalanceText={currentBalanceText}
             balanceValid={balanceValid}
