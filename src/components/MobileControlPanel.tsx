@@ -95,9 +95,9 @@ export function MobileControlPanel({
   const [containerH, setContainerH] = useState(0);
   const [snap, setSnap] = useState<Snap>("mid");
   // While dragging we override the snapped translate with the live one.
-  // null means "use the snap target".
+  // null means "use the snap target" (and also "not currently dragging").
   const [dragOffsetY, setDragOffsetY] = useState<number | null>(null);
-  const [dragging, setDragging] = useState(false);
+  const dragging = dragOffsetY !== null;
   const dragStateRef = useRef<{
     startY: number;
     startTranslate: number;
@@ -130,17 +130,12 @@ export function MobileControlPanel({
 
   // Tell the parent how many pixels of map are currently hidden by us so
   // it can offset map recentering. visibleHeight = containerH - targetY.
-  // Also clean up to 0 on unmount so desktop reverts to no-overlay.
+  // Cleanup resets to 0 so desktop reverts to no-overlay on unmount.
   useEffect(() => {
     if (!onVisibleHeightChange) return;
-    const visible = Math.max(containerH - targetY, 0);
-    onVisibleHeightChange(visible);
+    onVisibleHeightChange(Math.max(containerH - targetY, 0));
+    return () => onVisibleHeightChange(0);
   }, [containerH, targetY, onVisibleHeightChange]);
-  useEffect(() => {
-    return () => {
-      if (onVisibleHeightChange) onVisibleHeightChange(0);
-    };
-  }, [onVisibleHeightChange]);
 
   const onHandlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!e.isPrimary) return;
@@ -150,7 +145,6 @@ export function MobileControlPanel({
       startTranslate: snapY[snap],
       moved: false,
     };
-    setDragging(true);
     setDragOffsetY(snapY[snap]);
   };
 
@@ -171,14 +165,12 @@ export function MobileControlPanel({
     }
     if (state.moved) {
       const final = dragOffsetY ?? snapY[snap];
-      // Snap to nearest of the three targets.
-      const candidates: Array<{ snap: Snap; d: number }> = [
-        { snap: "full", d: Math.abs(final - snapY.full) },
-        { snap: "mid", d: Math.abs(final - snapY.mid) },
-        { snap: "collapsed", d: Math.abs(final - snapY.collapsed) },
-      ];
-      candidates.sort((a, b) => a.d - b.d);
-      setSnap(candidates[0].snap);
+      // Snap to whichever target is closest.
+      const snaps: Snap[] = ["full", "mid", "collapsed"];
+      const nearest = snaps.reduce((best, s) =>
+        Math.abs(final - snapY[s]) < Math.abs(final - snapY[best]) ? s : best,
+      );
+      setSnap(nearest);
     } else {
       // Tap (no real drag) cycles snap upward, like Google Maps.
       setSnap((s) =>
@@ -186,7 +178,6 @@ export function MobileControlPanel({
       );
     }
     setDragOffsetY(null);
-    setDragging(false);
     dragStateRef.current = null;
   };
 
