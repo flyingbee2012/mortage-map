@@ -98,10 +98,13 @@ export function MobileControlPanel({
   // null means "use the snap target" (and also "not currently dragging").
   const [dragOffsetY, setDragOffsetY] = useState<number | null>(null);
   const dragging = dragOffsetY !== null;
+  // Drag bookkeeping. `captured` flips true once the pointer moves past
+  // the tap threshold; until then we don't apply a transform, so taps on
+  // empty space are still cheap.
   const dragStateRef = useRef<{
     startY: number;
     startTranslate: number;
-    moved: boolean;
+    captured: boolean;
   } | null>(null);
 
   // Observe the parent (positioning context) so we re-snap correctly on
@@ -137,22 +140,33 @@ export function MobileControlPanel({
     return () => onVisibleHeightChange(0);
   }, [containerH, targetY, onVisibleHeightChange]);
 
-  const onHandlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+  // Pointer handlers attached to the entire content area so the user can
+  // drag the sheet by touching anywhere inside it (Google Maps style).
+  // We rely on touchAction: "none" on the content div to suppress the
+  // browser's native scroll, which would otherwise eat the drag gesture.
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!e.isPrimary) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
+    // Skip drag if the user is interacting with a control. Lets buttons
+    // and inputs behave normally; everything else is a drag surface.
+    const target = e.target as HTMLElement;
+    if (target.closest("button, input, a, textarea, select")) return;
     dragStateRef.current = {
       startY: e.clientY,
       startTranslate: snapY[snap],
-      moved: false,
+      captured: false,
     };
-    setDragOffsetY(snapY[snap]);
   };
 
-  const onHandlePointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const state = dragStateRef.current;
     if (!state) return;
     const dy = e.clientY - state.startY;
-    if (Math.abs(dy) > TAP_THRESHOLD_PX) state.moved = true;
+    if (!state.captured) {
+      if (Math.abs(dy) <= TAP_THRESHOLD_PX) return;
+      state.captured = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setDragOffsetY(snapY[snap]);
+    }
     const next = clamp(state.startTranslate + dy, snapY.full, snapY.collapsed);
     setDragOffsetY(next);
   };
@@ -160,10 +174,10 @@ export function MobileControlPanel({
   const endDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
     const state = dragStateRef.current;
     if (!state) return;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
-    if (state.moved) {
+    if (state.captured) {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
       const final = dragOffsetY ?? snapY[snap];
       // Snap to whichever target is closest.
       const snaps: Snap[] = ["full", "mid", "collapsed"];
@@ -171,13 +185,8 @@ export function MobileControlPanel({
         Math.abs(final - snapY[s]) < Math.abs(final - snapY[best]) ? s : best,
       );
       setSnap(nearest);
-    } else {
-      // Tap (no real drag) cycles snap upward, like Google Maps.
-      setSnap((s) =>
-        s === "collapsed" ? "mid" : s === "mid" ? "full" : "collapsed",
-      );
+      setDragOffsetY(null);
     }
-    setDragOffsetY(null);
     dragStateRef.current = null;
   };
 
@@ -194,25 +203,18 @@ export function MobileControlPanel({
         visibility: containerH > 0 ? "visible" : "hidden",
       }}
     >
-      {/* Drag handle / header: this is the only region that grabs touch
-          gestures. Content below scrolls normally. */}
+      {/* Content area. The sheet itself doesn't scroll — if more space is
+          needed, the user drags it to a taller snap. touchAction: "none"
+          suppresses the browser's native scroll so it doesn't eat our
+          drag gesture. */}
       <div
-        role="button"
-        tabIndex={0}
-        aria-label="Drag to resize panel"
-        className="shrink-0 cursor-grab active:cursor-grabbing select-none pt-2 pb-1"
+        className="flex-1 min-h-0 pt-4 px-4 pb-4 flex flex-col gap-3"
         style={{ touchAction: "none" }}
-        onPointerDown={onHandlePointerDown}
-        onPointerMove={onHandlePointerMove}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
       >
-        <div className="mx-auto h-1.5 w-12 rounded-full bg-neutral-600" />
-      </div>
-
-      {/* Scrollable content. min-h-0 + overflow-y-auto lets the inner area
-          scroll independently of the sheet position. */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 flex flex-col gap-3">
         {!isApiKeyConfigured(apiKey) && (
           <div className="shrink-0 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100 space-y-2">
             <p className="font-semibold">
