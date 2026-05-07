@@ -52,6 +52,11 @@ const FULL_MAP_PEEK_PX = 72;
 // Drag distance below which we treat a pointerup as a tap (so tapping the
 // handle cycles snap positions instead of snapping to the same place).
 const TAP_THRESHOLD_PX = 6;
+// Drag distance past which a small flick commits to the NEXT snap in the
+// direction of travel, instead of snapping to whichever target is closest.
+// Without this, a small drag toward the next snap would round back to the
+// starting snap and feel like the sheet "rejected" the gesture.
+const COMMIT_THRESHOLD_PX = 24;
 
 /**
  * Mobile control panel: a Google-Maps-style swipeable bottom sheet that
@@ -141,15 +146,13 @@ export function MobileControlPanel({
   }, [containerH, targetY, onVisibleHeightChange]);
 
   // Pointer handlers attached to the entire content area so the user can
-  // drag the sheet by touching anywhere inside it (Google Maps style).
-  // We rely on touchAction: "none" on the content div to suppress the
-  // browser's native scroll, which would otherwise eat the drag gesture.
+  // drag the sheet by touching anywhere inside it (Google Maps style),
+  // INCLUDING on top of buttons. We don't skip buttons here: if the user
+  // doesn't move past the tap threshold the button's click fires
+  // normally; if they do, we capture the pointer (which suppresses the
+  // synthetic click on the button) and treat it as a sheet drag.
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!e.isPrimary) return;
-    // Skip drag if the user is interacting with a control. Lets buttons
-    // and inputs behave normally; everything else is a drag surface.
-    const target = e.target as HTMLElement;
-    if (target.closest("button, input, a, textarea, select")) return;
     dragStateRef.current = {
       startY: e.clientY,
       startTranslate: snapY[snap],
@@ -179,11 +182,29 @@ export function MobileControlPanel({
         e.currentTarget.releasePointerCapture(e.pointerId);
       }
       const final = dragOffsetY ?? snapY[snap];
-      // Snap to whichever target is closest.
-      const snaps: Snap[] = ["full", "mid", "collapsed"];
-      const nearest = snaps.reduce((best, s) =>
-        Math.abs(final - snapY[s]) < Math.abs(final - snapY[best]) ? s : best,
-      );
+      const dy = final - state.startTranslate;
+      // For small-but-deliberate drags, commit to the next snap in the
+      // direction of travel so the sheet doesn't bounce back. For big
+      // drags, snap to whichever target is closest.
+      const ordered: Snap[] = ["full", "mid", "collapsed"];
+      const currentIdx = ordered.indexOf(snap);
+      let nearest: Snap;
+      if (Math.abs(dy) < COMMIT_THRESHOLD_PX) {
+        nearest = snap;
+      } else if (Math.abs(dy) < (containerH * 0.5) / 2) {
+        // Single-step in the direction of travel. dy>0 means dragged
+        // DOWN, which means we want the next collapsed-er snap.
+        const stepIdx = clamp(
+          currentIdx + (dy > 0 ? 1 : -1),
+          0,
+          ordered.length - 1,
+        );
+        nearest = ordered[stepIdx];
+      } else {
+        nearest = ordered.reduce((best, s) =>
+          Math.abs(final - snapY[s]) < Math.abs(final - snapY[best]) ? s : best,
+        );
+      }
       setSnap(nearest);
       setDragOffsetY(null);
     }
