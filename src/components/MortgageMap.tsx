@@ -838,9 +838,18 @@ export default function JiuXiangMortgageMap() {
   // walked off-screen), gently recenter the map on it. We only pan when
   // it's actually out of view so users who deliberately scrolled the map
   // elsewhere aren't yanked back on every tick.
+  //
+  // We also skip the pan on the tick where editMode flips false (i.e. the
+  // user just clicked "Done editing"). Otherwise the map yanks back to the
+  // blue arrow even though the user was deliberately looking somewhere else
+  // while reshaping the route.
+  const prevEditModeRef = useRef(editMode);
   useEffect(() => {
+    const justExitedEditMode = prevEditModeRef.current && !editMode;
+    prevEditModeRef.current = editMode;
     if (!mapReady || !mapInstanceRef.current) return;
     if (editMode || !currentPosition) return;
+    if (justExitedEditMode) return;
     const map = mapInstanceRef.current;
     const bounds = map.getBounds();
     if (!bounds) return;
