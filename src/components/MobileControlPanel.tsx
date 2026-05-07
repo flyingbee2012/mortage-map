@@ -43,9 +43,10 @@ type MobileControlPanelProps = {
 
 type Snap = "collapsed" | "mid" | "full";
 
-// How much sheet is visible at the "collapsed" snap (drag handle + a peek
-// of the progress bar). Tuned to feel like the Google Maps "peek" state.
-const COLLAPSED_PEEK_PX = 96;
+// How much sheet is visible at the "collapsed" snap. Sized to show just
+// the progress bar (pt-4 top padding + h-5 bar + a small breathing
+// margin), so the user gets max map space while still seeing progress.
+const COLLAPSED_PEEK_PX = 48;
 // How much MAP is visible at the "full" snap (so the user can still see
 // where they are without dismissing the sheet). Mirrors Google Maps.
 const FULL_MAP_PEEK_PX = 72;
