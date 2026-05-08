@@ -412,6 +412,7 @@ export default function JiuXiangMortgageMap() {
               ROUTE_REFRESH_TOKEN_STORAGE_KEY,
               remote.routeRefreshToken,
             );
+            showFlash("loaded", "Route refreshed from cloud");
           }
         }
         // Only flash if the remote actually differed from what was loaded
