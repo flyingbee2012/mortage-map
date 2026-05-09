@@ -26,6 +26,7 @@ type DesktopControlPanelProps = {
   stepCurrentBalance: (delta: number) => void;
   saveMortgageInputs: () => void;
   resetMortgageInputs: () => void;
+  focusCurrentPosition: () => void;
 
   // Stats.
   progress: number;
@@ -76,6 +77,7 @@ export function DesktopControlPanel({
   stepCurrentBalance,
   saveMortgageInputs,
   resetMortgageInputs,
+  focusCurrentPosition,
   progress,
   totalKm,
   traveledKm,
@@ -196,6 +198,14 @@ export function DesktopControlPanel({
             title="Restore the values to whatever was loaded when the app started. Does not modify localStorage."
           >
             Reset
+          </button>
+          <button
+            type="button"
+            className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-300 hover:bg-neutral-700 transition"
+            onClick={focusCurrentPosition}
+            title="Re-center the map on your current position."
+          >
+            Locate
           </button>
         </div>
       )}

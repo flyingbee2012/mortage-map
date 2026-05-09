@@ -1046,6 +1046,7 @@ export default function JiuXiangMortgageMap() {
             stepCurrentBalance={stepCurrentBalance}
             saveMortgageInputs={saveMortgageInputs}
             resetMortgageInputs={resetMortgageInputs}
+            focusCurrentPosition={focusCurrentPosition}
             progress={progress}
             totalKm={totalKm}
             traveledKm={traveledKm}
