@@ -300,6 +300,14 @@ export function DesktopControlPanel({
         {editMode && (
           <p className="text-xs text-neutral-300">
             Total: <strong>{totalKm.toFixed(4)} km</strong>
+            <span className="mx-2 text-neutral-500">·</span>
+            $1 ={" "}
+            <strong>
+              {safeOriginalPrincipal > 0
+                ? ((totalKm * 1000) / safeOriginalPrincipal).toFixed(4)
+                : "0.0000"}{" "}
+              m
+            </strong>
           </p>
         )}
 
