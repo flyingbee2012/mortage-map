@@ -18,6 +18,8 @@
  * URL; revisit if more users join.
  */
 
+import { Checkpoint, isValidCheckpoint } from "./helper";
+
 const GIST_ID = (import.meta.env.VITE_GIST_ID as string | undefined) ?? "";
 const GIST_TOKEN =
   (import.meta.env.VITE_GIST_TOKEN as string | undefined) ?? "";
@@ -28,13 +30,20 @@ export type MortgageGistData = {
   originalPrincipal: number;
   currentBalance: number;
   /**
-   * Optional opaque "refresh signal" for the stored route. When this value
-   * changes (or appears for the first time after being absent), each client
-   * clears its locally-stored route on next load so the bundled default
-   * route takes over. The value itself is never interpreted — only
-   * compared against the last token the client acted on. To force all
-   * clients to refresh, edit the gist and set this to any new string
-   * (e.g. a date or a counter). To stop forcing refreshes, leave it alone.
+   * The full edited route, synced across devices. When present, clients
+   * adopt this on load (overriding both localStorage and the bundled
+   * defaultRoute.json). Written by the "Done editing" flow whenever the
+   * route actually changed during the edit session. Absent on first-ever
+   * save / for backwards compatibility — clients then fall back to the
+   * legacy `routeRefreshToken` flow (or the bundled default).
+   */
+  route?: Checkpoint[];
+  /**
+   * Optional opaque "refresh signal" used as a manual escape hatch only:
+   * bump this in the gist (any new string) to force every client to wipe
+   * its local route and re-adopt the bundled defaultRoute.json on next
+   * load. The normal edit-and-sync flow uses `route` above instead, so
+   * this token is no longer touched automatically.
    */
   routeRefreshToken?: string;
 };
@@ -80,9 +89,16 @@ export async function loadFromGist(): Promise<MortgageGistData | null> {
     ) {
       return null;
     }
+    // The route field is optional; tolerate missing / malformed entries by
+    // dropping just that field rather than rejecting the whole payload.
+    let route: Checkpoint[] | undefined;
+    if (Array.isArray(parsed.route) && parsed.route.every(isValidCheckpoint)) {
+      route = parsed.route as Checkpoint[];
+    }
     return {
       originalPrincipal: parsed.originalPrincipal,
       currentBalance: parsed.currentBalance,
+      route,
       routeRefreshToken:
         typeof parsed.routeRefreshToken === "string"
           ? parsed.routeRefreshToken
@@ -101,21 +117,21 @@ export async function loadFromGist(): Promise<MortgageGistData | null> {
 export async function saveToGist(data: MortgageGistData): Promise<boolean> {
   if (!isGistConfigured()) return false;
   try {
-    // Strip undefined fields so we don't write `"routeRefreshToken": null`
-    // (or similar) into the gist when the caller doesn't have a token to
-    // preserve. Anything the caller passes through (incl. a token they
-    // loaded from a previous fetch) is written verbatim.
+    // Drop undefined fields so we don't write `null` placeholders into
+    // the gist for optional values the caller didn't supply. Anything
+    // present is written verbatim.
     const payload: Record<string, unknown> = {
       originalPrincipal: data.originalPrincipal,
       currentBalance: data.currentBalance,
     };
+    if (data.route) payload.route = data.route;
     if (typeof data.routeRefreshToken === "string") {
       payload.routeRefreshToken = data.routeRefreshToken;
     }
     const body = {
       files: {
         [GIST_FILENAME]: {
-          content: JSON.stringify(payload, null, 2) + "\n",
+          content: JSON.stringify(payload) + "\n",
         },
       },
     };

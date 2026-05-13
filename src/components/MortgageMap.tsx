@@ -310,6 +310,26 @@ export default function JiuXiangMortgageMap() {
   const finishEditingRoute = () => {
     editSnapshotRef.current = null;
     setEditMode(false);
+    if (!isGistConfigured()) {
+      showFlash("local-only", "✓ Route saved locally");
+      return;
+    }
+    showFlash("synced", "Syncing route…");
+    saveToGist({
+      originalPrincipal,
+      currentBalance,
+      route,
+      routeRefreshToken: remoteRouteRefreshTokenRef.current,
+    }).then((ok) => {
+      if (ok) {
+        showFlash("synced", "✓ Route synced to cloud");
+      } else {
+        showFlash(
+          "local-only",
+          "⚠ Route saved locally only (cloud sync failed)",
+        );
+      }
+    });
   };
   const cancelEditingRoute = () => {
     if (editSnapshotRef.current) {
@@ -392,14 +412,18 @@ export default function JiuXiangMortgageMap() {
         lastSavedBalanceRef.current = remote.currentBalance;
         initialPrincipalRef.current = remote.originalPrincipal;
         initialBalanceRef.current = remote.currentBalance;
-        // Route refresh signal: if the gist carries a token and it differs
-        // from the one this client last honored, wipe the locally stored
-        // route so the bundled defaultRoute.json takes over on this load,
-        // then remember the new token so we don't keep wiping on every
-        // refresh. Absence of a token in the gist means "no signal" and
-        // is left untouched. See ROUTE_REFRESH_TOKEN_STORAGE_KEY.
+        // Route sync: prefer the explicit `remote.route` (written by
+        // "Done editing" on any device) when present. It's the new
+        // source of truth and overrides both localStorage and the
+        // bundled defaultRoute.json. Falls back to the legacy
+        // `routeRefreshToken` flow only when no remote route is stored
+        // — useful as a manual "reset everyone to bundled defaults"
+        // escape hatch.
         remoteRouteRefreshTokenRef.current = remote.routeRefreshToken;
-        if (typeof remote.routeRefreshToken === "string") {
+        if (remote.route && remote.route.length > 0) {
+          setRoute(remote.route);
+          saveStoredRoute(remote.route);
+        } else if (typeof remote.routeRefreshToken === "string") {
           const lastHonored = window.localStorage.getItem(
             ROUTE_REFRESH_TOKEN_STORAGE_KEY,
           );
@@ -452,11 +476,12 @@ export default function JiuXiangMortgageMap() {
       return;
     }
     showFlash("synced", "Saving…");
-    void saveToGist({
+    saveToGist({
       originalPrincipal,
       currentBalance,
-      // Echo back whatever token the gist currently has so we don't strip
-      // the refresh signal on save. Undefined when no token is present.
+      // Echo back the current route and refresh token so this PATCH
+      // doesn't strip them from the gist (PATCH replaces the whole file).
+      route,
       routeRefreshToken: remoteRouteRefreshTokenRef.current,
     }).then((ok) => {
       if (ok) {
