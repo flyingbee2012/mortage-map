@@ -18,7 +18,12 @@
  * URL; revisit if more users join.
  */
 
-import { Checkpoint, isValidCheckpoint } from "./helper";
+import {
+  Checkpoint,
+  compactCheckpoints,
+  expandCheckpoints,
+  isValidCheckpoint,
+} from "./helper";
 
 const GIST_ID = (import.meta.env.VITE_GIST_ID as string | undefined) ?? "";
 const GIST_TOKEN =
@@ -82,9 +87,11 @@ export async function loadFromGist(): Promise<MortgageGistData | null> {
     }
     // The route field is optional; tolerate missing / malformed entries by
     // dropping just that field rather than rejecting the whole payload.
+    // Stored in compact form (placeholder names omitted); expand back to
+    // full Checkpoint[] before handing off to callers.
     let route: Checkpoint[] | undefined;
     if (Array.isArray(parsed.route) && parsed.route.every(isValidCheckpoint)) {
-      route = parsed.route as Checkpoint[];
+      route = expandCheckpoints(parsed.route);
     }
     return {
       originalPrincipal: parsed.originalPrincipal,
@@ -111,7 +118,7 @@ export async function saveToGist(data: MortgageGistData): Promise<boolean> {
       originalPrincipal: data.originalPrincipal,
       currentBalance: data.currentBalance,
     };
-    if (data.route) payload.route = data.route;
+    if (data.route) payload.route = compactCheckpoints(data.route);
     const body = {
       files: {
         [GIST_FILENAME]: {

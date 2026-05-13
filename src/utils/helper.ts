@@ -14,6 +14,20 @@ export type Checkpoint = LatLng & {
   name: string;
 };
 
+// On-disk shape used by localStorage and the gist. The `name` field is
+// optional: auto-generated placeholder names like "Checkpoint 47" are
+// stripped at the storage boundary and synthesized back on load. This
+// shaves 15–25% off route payloads since most points in long routes
+// carry no user-meaningful name.
+export type CompactCheckpoint = LatLng & {
+  name?: string;
+};
+
+// Names matching this pattern are treated as auto-generated placeholders
+// and dropped on save. Must stay in sync with the name template used by
+// `insertCheckpointAt` in MortgageMap.tsx (`Checkpoint <n+1>`).
+const PLACEHOLDER_NAME_RE = /^Checkpoint \d+$/;
+
 export type RouteSegment = {
   start: LatLng;
   end: LatLng;
@@ -43,11 +57,13 @@ export function saveStoredNumber(key: string, value: number): void {
   }
 }
 
-export function isValidCheckpoint(value: unknown): value is Checkpoint {
+export function isValidCheckpoint(value: unknown): value is CompactCheckpoint {
   if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<Checkpoint>;
+  const candidate = value as Partial<CompactCheckpoint>;
+  if (candidate.name !== undefined && typeof candidate.name !== "string") {
+    return false;
+  }
   return (
-    typeof candidate.name === "string" &&
     typeof candidate.lat === "number" &&
     typeof candidate.lng === "number" &&
     Number.isFinite(candidate.lat) &&
@@ -59,14 +75,35 @@ export function isValidCheckpoint(value: unknown): value is Checkpoint {
   );
 }
 
+// Strip auto-generated placeholder names so they don't bloat storage.
+// User-renamed checkpoints (anything not matching `PLACEHOLDER_NAME_RE`)
+// keep their name verbatim.
+export function compactCheckpoints(route: Checkpoint[]): CompactCheckpoint[] {
+  return route.map((cp) =>
+    PLACEHOLDER_NAME_RE.test(cp.name)
+      ? { lat: cp.lat, lng: cp.lng }
+      : { lat: cp.lat, lng: cp.lng, name: cp.name },
+  );
+}
+
+export function expandCheckpoints(compact: CompactCheckpoint[]): Checkpoint[] {
+  return compact.map((cp, i) => ({
+    lat: cp.lat,
+    lng: cp.lng,
+    name: cp.name ?? `Checkpoint ${i + 1}`,
+  }));
+}
+
 export function loadStoredRoute(): Checkpoint[] | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(ROUTE_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || !parsed.every(isValidCheckpoint)) return null;
-    return parsed;
+    if (!Array.isArray(parsed) || !parsed.every(isValidCheckpoint)) {
+      return null;
+    }
+    return expandCheckpoints(parsed);
   } catch {
     return null;
   }
@@ -75,7 +112,10 @@ export function loadStoredRoute(): Checkpoint[] | null {
 export function saveStoredRoute(route: Checkpoint[]): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(ROUTE_STORAGE_KEY, JSON.stringify(route));
+    window.localStorage.setItem(
+      ROUTE_STORAGE_KEY,
+      JSON.stringify(compactCheckpoints(route)),
+    );
   } catch {
     // ignore quota / serialization errors
   }
