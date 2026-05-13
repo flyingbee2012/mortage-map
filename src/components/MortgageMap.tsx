@@ -46,14 +46,14 @@ const CURRENT_BALANCE_STORAGE_KEY = "mortgageMap.currentBalance.v1";
 // Splitting it into its own chunk via dynamic import() keeps it out of the
 // initial bundle for returning users, who almost always have a stored route.
 // The promise is memoized so concurrent callers share a single fetch.
-let defaultRoutePromise: Promise<Checkpoint[]> | null = null;
-function loadDefaultRoute(): Promise<Checkpoint[]> {
-  if (defaultRoutePromise === null) {
-    defaultRoutePromise = import("../data/defaultRoute.json").then(
+let routeJsonPromise: Promise<Checkpoint[]> | null = null;
+function loadRouteFromJson(): Promise<Checkpoint[]> {
+  if (routeJsonPromise === null) {
+    routeJsonPromise = import("../data/defaultRoute.json").then(
       (mod) => mod.default as Checkpoint[],
     );
   }
-  return defaultRoutePromise;
+  return routeJsonPromise;
 }
 
 export default function JiuXiangMortgageMap() {
@@ -235,7 +235,7 @@ export default function JiuXiangMortgageMap() {
   useEffect(() => {
     if (route.length > 0) return;
     let cancelled = false;
-    loadDefaultRoute().then((def) => {
+    loadRouteFromJson().then((def) => {
       if (cancelled) return;
       setRoute(def);
     });
@@ -957,7 +957,7 @@ export default function JiuXiangMortgageMap() {
       )
     ) {
       clearStoredRoute();
-      loadDefaultRoute().then((def) => setRoute(def));
+      loadRouteFromJson().then((def) => setRoute(def));
     }
   };
   const fitMapToRoute = () => {
