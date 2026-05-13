@@ -38,16 +38,11 @@ const GOOGLE_MAPS_API_KEY: string =
   (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined) ?? "";
 const ORIGINAL_PRINCIPAL_STORAGE_KEY = "mortgageMap.originalPrincipal.v1";
 const CURRENT_BALANCE_STORAGE_KEY = "mortgageMap.currentBalance.v1";
-// Stores the last `routeRefreshToken` value this client honored from the
-// gist. When the remote token differs from this, the client clears its
-// stored route on next load so the bundled defaultRoute.json wins again.
-// See the gist-load effect for the comparison logic.
-const ROUTE_REFRESH_TOKEN_STORAGE_KEY = "mortgageMap.routeRefreshToken.v1";
 
 // Lazy loader for the bundled default route. The JSON is only needed when:
-//   1. localStorage has no stored route (first run / cleared storage)
-//   2. the gist's routeRefreshToken changed and we wipe the stored route
-//   3. the user clicks "Reset to default" in the desktop edit-route flow
+//   1. localStorage has no stored route AND the gist has no route either
+//      (genuine first run / cleared storage with no remote sync yet)
+//   2. the user clicks "Reset to default" in the desktop edit-route flow
 // Splitting it into its own chunk via dynamic import() keeps it out of the
 // initial bundle for returning users, who almost always have a stored route.
 // The promise is memoized so concurrent callers share a single fetch.
@@ -319,7 +314,6 @@ export default function JiuXiangMortgageMap() {
       originalPrincipal,
       currentBalance,
       route,
-      routeRefreshToken: remoteRouteRefreshTokenRef.current,
     }).then((ok) => {
       if (ok) {
         showFlash("synced", "✓ Route synced to cloud");
@@ -347,12 +341,6 @@ export default function JiuXiangMortgageMap() {
   // changed since the previous save / initial load.
   const lastSavedPrincipalRef = useRef<number>(initialPrincipalRef.current);
   const lastSavedBalanceRef = useRef<number>(initialBalanceRef.current);
-  // Latest `routeRefreshToken` we observed in the gist. Held in a ref so
-  // saveToGist can echo it back unchanged — if we omitted it, every save
-  // would silently strip the signal from the gist and break the next
-  // refresh. Undefined until the first successful gist load (or forever
-  // if the gist isn't configured / has no token field).
-  const remoteRouteRefreshTokenRef = useRef<string | undefined>(undefined);
   // Transient "Saved" message shown next to the Save button. Cleared after
   // ~2s. The timer ref lets a rapid second Save reset the countdown without
   // stacking timeouts.
@@ -413,31 +401,14 @@ export default function JiuXiangMortgageMap() {
         initialPrincipalRef.current = remote.originalPrincipal;
         initialBalanceRef.current = remote.currentBalance;
         // Route sync: prefer the explicit `remote.route` (written by
-        // "Done editing" on any device) when present. It's the new
-        // source of truth and overrides both localStorage and the
-        // bundled defaultRoute.json. Falls back to the legacy
-        // `routeRefreshToken` flow only when no remote route is stored
-        // — useful as a manual "reset everyone to bundled defaults"
-        // escape hatch.
-        remoteRouteRefreshTokenRef.current = remote.routeRefreshToken;
+        // "Done editing" on any device) when present. It's the source of
+        // truth and overrides both localStorage and the bundled
+        // defaultRoute.json. If the gist has no route field yet (e.g. a
+        // fresh gist that's only stored mortgage values so far), keep
+        // whatever we already have locally.
         if (remote.route && remote.route.length > 0) {
           setRoute(remote.route);
           saveStoredRoute(remote.route);
-        } else if (typeof remote.routeRefreshToken === "string") {
-          const lastHonored = window.localStorage.getItem(
-            ROUTE_REFRESH_TOKEN_STORAGE_KEY,
-          );
-          if (lastHonored !== remote.routeRefreshToken) {
-            clearStoredRoute();
-            const def = await loadDefaultRoute();
-            if (cancelled) return;
-            setRoute(def);
-            window.localStorage.setItem(
-              ROUTE_REFRESH_TOKEN_STORAGE_KEY,
-              remote.routeRefreshToken,
-            );
-            showFlash("loaded", "Route refreshed from cloud");
-          }
         }
         // Only flash if the remote actually differed from what was loaded
         // from localStorage on startup, otherwise it's a no-op.
@@ -479,10 +450,9 @@ export default function JiuXiangMortgageMap() {
     saveToGist({
       originalPrincipal,
       currentBalance,
-      // Echo back the current route and refresh token so this PATCH
-      // doesn't strip them from the gist (PATCH replaces the whole file).
+      // Echo back the current route so this PATCH doesn't strip it from
+      // the gist (PATCH replaces the whole file).
       route,
-      routeRefreshToken: remoteRouteRefreshTokenRef.current,
     }).then((ok) => {
       if (ok) {
         showFlash("synced", "✓ Saved & synced to cloud");

@@ -34,18 +34,9 @@ export type MortgageGistData = {
    * adopt this on load (overriding both localStorage and the bundled
    * defaultRoute.json). Written by the "Done editing" flow whenever the
    * route actually changed during the edit session. Absent on first-ever
-   * save / for backwards compatibility — clients then fall back to the
-   * legacy `routeRefreshToken` flow (or the bundled default).
+   * save — clients then fall back to the bundled defaultRoute.json.
    */
   route?: Checkpoint[];
-  /**
-   * Optional opaque "refresh signal" used as a manual escape hatch only:
-   * bump this in the gist (any new string) to force every client to wipe
-   * its local route and re-adopt the bundled defaultRoute.json on next
-   * load. The normal edit-and-sync flow uses `route` above instead, so
-   * this token is no longer touched automatically.
-   */
-  routeRefreshToken?: string;
 };
 
 export function isGistConfigured(): boolean {
@@ -99,10 +90,6 @@ export async function loadFromGist(): Promise<MortgageGistData | null> {
       originalPrincipal: parsed.originalPrincipal,
       currentBalance: parsed.currentBalance,
       route,
-      routeRefreshToken:
-        typeof parsed.routeRefreshToken === "string"
-          ? parsed.routeRefreshToken
-          : undefined,
     };
   } catch {
     return null;
@@ -125,9 +112,6 @@ export async function saveToGist(data: MortgageGistData): Promise<boolean> {
       currentBalance: data.currentBalance,
     };
     if (data.route) payload.route = data.route;
-    if (typeof data.routeRefreshToken === "string") {
-      payload.routeRefreshToken = data.routeRefreshToken;
-    }
     const body = {
       files: {
         [GIST_FILENAME]: {
