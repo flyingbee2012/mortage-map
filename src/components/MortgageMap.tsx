@@ -769,9 +769,6 @@ export default function JiuXiangMortgageMap() {
             ),
           );
         });
-        marker.addListener("rightclick", () => {
-          setRoute((prev) => prev.filter((_, i) => i !== index));
-        });
       }
 
       marker.addListener("click", () => {
@@ -891,6 +888,45 @@ export default function JiuXiangMortgageMap() {
   // marker (every miss-click added a stray waypoint). Use the "+" button in
   // the route list to insert checkpoints between existing ones instead.
 
+  // Right-click anywhere on the map (in edit mode) inserts a new checkpoint
+  // immediately after the currently selected checkpoint. If no checkpoint is
+  // selected, the right-click is a no-op. We register on the map so the
+  // gesture works whether the user clicks empty terrain, the route polyline,
+  // or on top of an existing marker.
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current) return;
+    if (!editMode) return;
+    const map = mapInstanceRef.current;
+
+    // Shared handler: insert a new checkpoint after the current selection
+    // and move the selection onto the freshly inserted one so subsequent
+    // right-clicks chain (each new marker becomes the anchor for the next).
+    const handleRightClick = () => {
+      const selected = selectedIndexRef.current;
+      if (selected === null) return;
+      const newIndex = selected + 1;
+      insertCheckpointAtRef.current(newIndex);
+      setSelectedCheckpointIndex(newIndex);
+    };
+
+    const mapListener = map.addListener("rightclick", handleRightClick);
+    // Markers swallow the map's rightclick, so also attach to each marker.
+    const markerListeners = checkpointMarkersRef.current.map((m) =>
+      m.addListener("rightclick", handleRightClick),
+    );
+    // The current-position marker can also intercept right-clicks.
+    const currentMarkerListener = currentMarkerRef.current?.addListener(
+      "rightclick",
+      handleRightClick,
+    );
+
+    return () => {
+      google.maps.event.removeListener(mapListener);
+      markerListeners.forEach((l) => google.maps.event.removeListener(l));
+      if (currentMarkerListener)
+        google.maps.event.removeListener(currentMarkerListener);
+    };
+  }, [editMode, mapReady, viewportVersion, route]);
   // Keep the current-position marker in sync. While in edit mode we pause
   // updates so the blue arrow doesn't jump around as you reshape the route.
   // When you click "Done editing", editMode flips and this effect runs once
@@ -952,6 +988,10 @@ export default function JiuXiangMortgageMap() {
       return next;
     });
   };
+  // Ref mirror so the map-level rightclick listener (registered once per
+  // edit-mode session) always calls the freshest insertCheckpointAt.
+  const insertCheckpointAtRef = useRef(insertCheckpointAt);
+  insertCheckpointAtRef.current = insertCheckpointAt;
   const deleteCheckpoint = (index: number) => {
     setRoute((prev) => prev.filter((_, i) => i !== index));
   };
