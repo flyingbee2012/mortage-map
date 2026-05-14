@@ -5,6 +5,7 @@ import { MapView } from "./MapView";
 import {
   Checkpoint,
   clamp,
+  compactCheckpoints,
   getCurrentCheckpointFromSegments,
   getPointAlongSegments,
   getRouteSegments,
@@ -987,7 +988,7 @@ export default function JiuXiangMortgageMap() {
   // latest closure (so it sees the current `currentPosition` / `route`).
   focusCurrentPositionRef.current = focusCurrentPosition;
   const exportRouteJson = () => {
-    const json = JSON.stringify(route, null, 2) + "\n";
+    const json = JSON.stringify(compactCheckpoints(route), null, 2) + "\n";
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
