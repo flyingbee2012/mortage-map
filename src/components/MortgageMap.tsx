@@ -540,13 +540,17 @@ export default function JiuXiangMortgageMap() {
         const initialCenter =
           currentPosition ?? (route.length > 0 ? route[0] : { lat: 0, lng: 0 });
 
+        // Hide the Map/Satellite toggle on mobile to free up screen real
+        // estate; HYBRID (satellite with labels) is the only mode we use.
+        // Evaluated only at map init — switching breakpoints later won't
+        // toggle the control until the next reload.
         const map = new google.maps.Map(mapRef.current, {
           center: initialCenter,
           zoom: 15,
           mapTypeId: google.maps.MapTypeId.HYBRID,
           fullscreenControl: true,
           streetViewControl: false,
-          mapTypeControl: true,
+          mapTypeControl: isLargeScreen,
           gestureHandling: "greedy",
         });
 
