@@ -1,7 +1,6 @@
 // Pure helper methods extracted from MortgageMap.tsx. Behavior is unchanged;
 // this file only relocates the existing functions, the types they use, and
 // the storage / script constants they reference internally.
-
 const ROUTE_STORAGE_KEY = "mortgageMap.route.v1";
 const GOOGLE_MAPS_SCRIPT_ID = "google-maps-js-api";
 
