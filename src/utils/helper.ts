@@ -51,9 +51,7 @@ export function saveStoredNumber(key: string, value: number): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(key, String(value));
-  } catch {
-    // ignore
-  }
+  } catch {}
 }
 
 export function isValidCheckpoint(value: unknown): value is CompactCheckpoint {
