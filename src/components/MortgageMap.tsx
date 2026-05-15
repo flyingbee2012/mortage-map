@@ -979,6 +979,30 @@ export default function JiuXiangMortgageMap() {
     return () => window.removeEventListener("keydown", handler);
   }, [editMode, route.length]);
 
+  // Middle-mouse-click anywhere on the map (in edit mode) deletes the
+  // currently selected checkpoint. Attached to the map's container div so
+  // it fires whether the click lands on a marker, the polyline, or empty
+  // terrain. After deletion, selection moves to the previous checkpoint
+  // (or stays at 0 if the deleted one was already the first), so chained
+  // middle-clicks keep walking backward through the route.
+  useEffect(() => {
+    if (!editMode || !mapReady || !mapInstanceRef.current) return;
+    const div = mapInstanceRef.current.getDiv();
+    const handler = (e: MouseEvent) => {
+      if (e.button !== 1) return;
+      const selected = selectedIndexRef.current;
+      if (selected === null) return;
+      // Suppress the browser's middle-click autoscroll bubble.
+      e.preventDefault();
+      deleteCheckpointRef.current(selected);
+      setSelectedCheckpointIndex((prev) =>
+        prev === null ? null : Math.max(0, prev - 1),
+      );
+    };
+    div.addEventListener("mousedown", handler);
+    return () => div.removeEventListener("mousedown", handler);
+  }, [editMode, mapReady]);
+
   // Keep the current-position marker in sync. While in edit mode we pause
   // updates so the blue arrow doesn't jump around as you reshape the route.
   // When you click "Done editing", editMode flips and this effect runs once
@@ -1043,6 +1067,10 @@ export default function JiuXiangMortgageMap() {
   const deleteCheckpoint = (index: number) => {
     setRoute((prev) => prev.filter((_, i) => i !== index));
   };
+  // Ref mirror so the middle-click listener always calls the freshest
+  // deleteCheckpoint (same pattern as insertCheckpointAtRef).
+  const deleteCheckpointRef = useRef(deleteCheckpoint);
+  deleteCheckpointRef.current = deleteCheckpoint;
   const resetRoute = () => {
     if (
       window.confirm(
