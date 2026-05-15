@@ -314,7 +314,8 @@ export function DesktopControlPanel({
         {editMode && (
           <p className="text-xs text-neutral-400 leading-relaxed">
             Drag a marker to move it. Select a checkpoint, then right-click
-            anywhere to insert a new checkpoint after it.
+            anywhere to insert a new checkpoint after it (Shift+right-click to
+            insert before).
           </p>
         )}
 

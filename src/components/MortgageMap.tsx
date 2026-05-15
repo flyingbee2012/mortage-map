@@ -889,22 +889,33 @@ export default function JiuXiangMortgageMap() {
   // the route list to insert checkpoints between existing ones instead.
 
   // Right-click anywhere on the map (in edit mode) inserts a new checkpoint
-  // immediately after the currently selected checkpoint. If no checkpoint is
-  // selected, the right-click is a no-op. We register on the map so the
-  // gesture works whether the user clicks empty terrain, the route polyline,
-  // or on top of an existing marker.
+  // relative to the currently selected checkpoint:
+  //   • plain right-click       → insert AFTER selected
+  //   • Shift + right-click     → insert BEFORE selected
+  // If no checkpoint is selected, the right-click is a no-op. We register
+  // on the map so the gesture works whether the user clicks empty terrain,
+  // the route polyline, or on top of an existing marker.
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current) return;
     if (!editMode) return;
     const map = mapInstanceRef.current;
 
-    // Shared handler: insert a new checkpoint after the current selection
-    // and move the selection onto the freshly inserted one so subsequent
-    // right-clicks chain (each new marker becomes the anchor for the next).
-    const handleRightClick = () => {
+    // Shared handler: right-click inserts a new checkpoint relative to the
+    // current selection. Plain right-click inserts AFTER, Shift+right-click
+    // inserts BEFORE. Selection moves to the freshly inserted checkpoint so
+    // subsequent right-clicks chain (each new marker becomes the anchor
+    // for the next).
+    const handleRightClick = (e: google.maps.MapMouseEvent) => {
       const selected = selectedIndexRef.current;
       if (selected === null) return;
-      const newIndex = selected + 1;
+      const shift = !!(e?.domEvent as MouseEvent | undefined)?.shiftKey;
+      // "before" means insert at the selected slot (which pushes the
+      // currently-selected one down); "after" means insert at selected+1.
+      // insertCheckpointAt is a no-op for index <= 0, so Shift+right-click
+      // on the first checkpoint does nothing (matching the disabled +
+      // button on the first row).
+      const newIndex = shift ? selected : selected + 1;
+      if (shift && selected === 0) return;
       insertCheckpointAtRef.current(newIndex);
       setSelectedCheckpointIndex(newIndex);
     };
