@@ -896,8 +896,7 @@ export default function JiuXiangMortgageMap() {
   // on the map so the gesture works whether the user clicks empty terrain,
   // the route polyline, or on top of an existing marker.
   useEffect(() => {
-    if (!mapReady || !mapInstanceRef.current) return;
-    if (!editMode) return;
+    if (!mapReady || !mapInstanceRef.current || !editMode) return;
     const map = mapInstanceRef.current;
 
     // Shared handler: right-click inserts a new checkpoint relative to the
@@ -938,6 +937,48 @@ export default function JiuXiangMortgageMap() {
         google.maps.event.removeListener(currentMarkerListener);
     };
   }, [editMode, mapReady, viewportVersion, route]);
+
+  // Keyboard navigation in edit mode: Tab selects the next checkpoint,
+  // Shift+Tab selects the previous one. Skipped while a text input /
+  // contenteditable has focus so the user can still tab through the
+  // checkpoint name fields normally. Clamps at the ends of the route
+  // (no wrap-around).
+  useEffect(() => {
+    if (!editMode) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const active = document.activeElement as HTMLElement | null;
+      if (active) {
+        const tag = active.tagName;
+        if (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          tag === "SELECT" ||
+          active.isContentEditable
+        ) {
+          return;
+        }
+      }
+      const selected = selectedIndexRef.current;
+      if (selected === null) return;
+      const last = route.length - 1;
+      if (last < 0) return;
+      const next = e.shiftKey
+        ? Math.max(0, selected - 1)
+        : Math.min(last, selected + 1);
+      if (next === selected) {
+        // Still consume the Tab so focus doesn't escape the panel when
+        // we're already at the end of the route.
+        e.preventDefault();
+        return;
+      }
+      e.preventDefault();
+      setSelectedCheckpointIndex(next);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [editMode, route.length]);
+
   // Keep the current-position marker in sync. While in edit mode we pause
   // updates so the blue arrow doesn't jump around as you reshape the route.
   // When you click "Done editing", editMode flips and this effect runs once
