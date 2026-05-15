@@ -1023,14 +1023,10 @@ export default function JiuXiangMortgageMap() {
       if (index <= 0 || index > prev.length) return prev;
       const before = prev[index - 1];
       const after = prev[index] ?? before;
-      // Place the new checkpoint 95% of the way from `after` toward `before`,
-      // so it sits right next to the row the user clicked the + on. This keeps
-      // the new marker inside the current view (the selected/clicked
-      // checkpoint is almost always already visible) instead of landing at
-      // the geometric midpoint, which can be far off-screen for long hops.
-      const t = 0.95;
-      const lat = after.lat + (before.lat - after.lat) * t;
-      const lng = after.lng + (before.lng - after.lng) * t;
+      // Place the new checkpoint at the geometric midpoint between the
+      // two neighbors — matches the original behavior of the + button.
+      const lat = (before.lat + after.lat) / 2;
+      const lng = (before.lng + after.lng) / 2;
       const next = [...prev];
       next.splice(index, 0, {
         name: `Checkpoint ${prev.length + 1}`,
