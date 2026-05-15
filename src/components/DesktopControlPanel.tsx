@@ -47,8 +47,6 @@ type DesktopControlPanelProps = {
   setSelectedCheckpointIndex: (i: number | null) => void;
   selectedListItemRef: RefObject<HTMLLIElement>;
   renameCheckpoint: (index: number, name: string) => void;
-  insertCheckpointAt: (index: number) => void;
-  deleteCheckpoint: (index: number) => void;
   fitMapToRoute: () => void;
   exportRouteJson: () => void;
   resetRoute: () => void;
@@ -94,8 +92,6 @@ export function DesktopControlPanel({
   setSelectedCheckpointIndex,
   selectedListItemRef,
   renameCheckpoint,
-  insertCheckpointAt,
-  deleteCheckpoint,
   fitMapToRoute,
   exportRouteJson,
   resetRoute,
@@ -314,8 +310,9 @@ export function DesktopControlPanel({
         {editMode && (
           <p className="text-xs text-neutral-400 leading-relaxed">
             Drag a marker to move it. Select a checkpoint, then right-click
-            anywhere to insert a new checkpoint after it (Shift+right-click to
-            insert before).
+            anywhere to insert a new one after it (Shift+right-click inserts
+            before). Middle-click deletes the selected checkpoint. Tab /
+            Shift+Tab steps the selection along the route.
           </p>
         )}
 
@@ -353,31 +350,6 @@ export function DesktopControlPanel({
                     >
                       {checkpoint.name}
                     </span>
-                  )}
-                  {editMode && (
-                    <>
-                      <button
-                        className="rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-30"
-                        type="button"
-                        disabled={index === 0}
-                        onClick={() => insertCheckpointAt(index)}
-                        title={
-                          index === 0
-                            ? "Cannot insert before the first checkpoint"
-                            : `Insert a new checkpoint between ${route[index - 1].name} and ${checkpoint.name}`
-                        }
-                      >
-                        +
-                      </button>
-                      <button
-                        className="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-red-200 hover:bg-red-500/20"
-                        type="button"
-                        onClick={() => deleteCheckpoint(index)}
-                        title="Delete"
-                      >
-                        ✕
-                      </button>
-                    </>
                   )}
                 </li>
               );

@@ -1179,8 +1179,6 @@ export default function JiuXiangMortgageMap() {
             setSelectedCheckpointIndex={setSelectedCheckpointIndex}
             selectedListItemRef={selectedListItemRef}
             renameCheckpoint={renameCheckpoint}
-            insertCheckpointAt={insertCheckpointAt}
-            deleteCheckpoint={deleteCheckpoint}
             fitMapToRoute={fitMapToRoute}
             exportRouteJson={exportRouteJson}
             resetRoute={resetRoute}
