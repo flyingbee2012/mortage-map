@@ -552,6 +552,7 @@ export default function JiuXiangMortgageMap() {
           fullscreenControl: true,
           streetViewControl: false,
           mapTypeControl: isLargeScreen,
+          scaleControl: isLargeScreen,
           gestureHandling: "greedy",
         });
 
@@ -561,6 +562,7 @@ export default function JiuXiangMortgageMap() {
           strokeColor: "#3b82f6",
           strokeOpacity: 0.9,
           strokeWeight: 4,
+          clickable: false,
           map,
         });
 
@@ -1211,6 +1213,7 @@ export default function JiuXiangMortgageMap() {
   // still in flight — clicking ten times fast would otherwise fire ten
   // billable requests and splice ten chains into the route.
   const routingInFlightRef = useRef(false);
+
   const resetRoute = () => {
     if (
       window.confirm(
