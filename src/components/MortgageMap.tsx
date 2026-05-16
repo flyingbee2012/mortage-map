@@ -1027,7 +1027,7 @@ export default function JiuXiangMortgageMap() {
         // already have in the route) and cap to a sane maximum so a wildly
         // twisty route doesn't dump 200 markers in one shot.
         let simplified = simplifyPath(raw, tolerance).slice(1);
-        const MAX_INSERT = 30;
+        const MAX_INSERT = 200;
         if (simplified.length > MAX_INSERT) {
           const sampled: LatLng[] = [];
           const lastSlot = MAX_INSERT - 1;
