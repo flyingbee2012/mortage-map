@@ -74,9 +74,35 @@ export async function loadFromGist(): Promise<MortgageGistData | null> {
     });
     if (!res.ok) return null;
     const json = (await res.json()) as {
-      files?: Record<string, { content?: string } | undefined>;
+      files?: Record<
+        string,
+        | {
+            content?: string;
+            truncated?: boolean;
+            raw_url?: string;
+          }
+        | undefined
+      >;
     };
-    const content = json.files?.[GIST_FILENAME]?.content;
+    const file = json.files?.[GIST_FILENAME];
+    if (!file) return null;
+    // GitHub Gist API inlines file content only up to ~1 MB; past that it
+    // returns the content truncated mid-character and sets `truncated:
+    // true` with a `raw_url` pointing at the full file. Once a long route
+    // is saved the inline `content` parses as garbage (e.g. "Unterminated
+    // fractional number in JSON"), so follow `raw_url` in that case.
+    // Append a cache-buster because raw.githubusercontent.com aggressively
+    // caches and `cache: "no-store"` alone isn't always honored upstream.
+    let content: string | undefined;
+    if (file.truncated && file.raw_url) {
+      const rawRes = await fetch(`${file.raw_url}?t=${Date.now()}`, {
+        cache: "no-store",
+      });
+      if (!rawRes.ok) return null;
+      content = await rawRes.text();
+    } else {
+      content = file.content;
+    }
     if (typeof content !== "string") return null;
     const parsed = JSON.parse(content) as Partial<MortgageGistData>;
     if (
