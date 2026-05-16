@@ -16,6 +16,7 @@ import {
   saveStoredNumber,
   saveStoredRoute,
   clearStoredRoute,
+  simplifyPath,
 } from "../utils/helper";
 import { isGistConfigured, loadFromGist, saveToGist } from "../utils/gistStore";
 
@@ -979,6 +980,90 @@ export default function JiuXiangMortgageMap() {
     return () => window.removeEventListener("keydown", handler);
   }, [editMode, route.length]);
 
+  // Ctrl+click anywhere on the map (in edit mode) calls the Google
+  // Directions API to walk-route from the currently selected checkpoint
+  // to the clicked location, then splices the simplified path in as new
+  // checkpoints. Shift+Ctrl+click uses a coarser simplification tolerance
+  // (fewer points) for quick rough sketches.
+  //
+  // Cost: each Ctrl+click is one Directions API request (~$0.005 in the
+  // standard tier, well under Google's monthly free credit for personal
+  // use). `routingInFlightRef` ensures rapid clicks don't fire concurrent
+  // billable requests.
+  useEffect(() => {
+    if (!editMode || !mapReady || !mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+    const handler = async (e: google.maps.MapMouseEvent) => {
+      const dom = e.domEvent as MouseEvent | undefined;
+      if (!dom?.ctrlKey) return;
+      if (!e.latLng) return;
+      const selected = selectedIndexRef.current;
+      if (selected === null) return;
+      const origin = routeRef.current[selected];
+      if (!origin) return;
+      if (routingInFlightRef.current) return;
+      // Stop the click from also reaching the marker-selection handler.
+      e.stop?.();
+      routingInFlightRef.current = true;
+      const dest = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+      const tolerance = dom.shiftKey ? 20 : 5;
+      try {
+        if (directionsServiceRef.current === null) {
+          directionsServiceRef.current = new google.maps.DirectionsService();
+        }
+        const result = await directionsServiceRef.current.route({
+          origin: { lat: origin.lat, lng: origin.lng },
+          destination: dest,
+          travelMode: google.maps.TravelMode.WALKING,
+        });
+        const path = result.routes[0]?.overview_path ?? [];
+        if (path.length === 0) return;
+        const raw: LatLng[] = path.map((ll) => ({
+          lat: ll.lat(),
+          lng: ll.lng(),
+        }));
+        // Simplify to drop redundant points on straight runs while keeping
+        // sharp corners. Then drop the first point (it's the origin we
+        // already have in the route) and cap to a sane maximum so a wildly
+        // twisty route doesn't dump 200 markers in one shot.
+        let simplified = simplifyPath(raw, tolerance).slice(1);
+        const MAX_INSERT = 30;
+        if (simplified.length > MAX_INSERT) {
+          const sampled: LatLng[] = [];
+          const lastSlot = MAX_INSERT - 1;
+          for (let s = 0; s < MAX_INSERT; s++) {
+            const sourceIdx = Math.round(
+              (s * (simplified.length - 1)) / lastSlot,
+            );
+            sampled.push(simplified[sourceIdx]);
+          }
+          simplified = sampled;
+        }
+        if (simplified.length === 0) return;
+        const lastInserted = insertCheckpointsAfterRef.current(
+          selected,
+          simplified,
+        );
+        setSelectedCheckpointIndex(lastInserted);
+      } catch (err) {
+        // Most likely cause: Directions API isn't enabled on the Google
+        // Cloud project, or referer restrictions block it. Fall back to
+        // the existing midpoint-insert behavior so the user still gets a
+        // checkpoint, and surface the reason once.
+        console.warn(
+          "Directions request failed, falling back to midpoint:",
+          err,
+        );
+        insertCheckpointAtRef.current(selected + 1);
+        setSelectedCheckpointIndex(selected + 1);
+      } finally {
+        routingInFlightRef.current = false;
+      }
+    };
+    const mapListener = map.addListener("click", handler);
+    return () => google.maps.event.removeListener(mapListener);
+  }, [editMode, mapReady]);
+
   // Middle-mouse-click anywhere on the map (in edit mode) deletes the
   // currently selected checkpoint. Attached to the map's container div so
   // it fires whether the click lands on a marker, the polyline, or empty
@@ -1071,6 +1156,41 @@ export default function JiuXiangMortgageMap() {
   // deleteCheckpoint (same pattern as insertCheckpointAtRef).
   const deleteCheckpointRef = useRef(deleteCheckpoint);
   deleteCheckpointRef.current = deleteCheckpoint;
+  // Splice a chain of checkpoints into the route immediately after `index`.
+  // Used by the Ctrl+click auto-route flow to drop in the simplified
+  // Directions path in one shot. Returns the index of the last inserted
+  // point (so the caller can re-select it for chaining).
+  const insertCheckpointsAfter = (index: number, points: LatLng[]): number => {
+    if (points.length === 0) return index;
+    setRoute((prev) => {
+      if (index < 0 || index >= prev.length) return prev;
+      const baseN = prev.length;
+      const newCps: Checkpoint[] = points.map((p, i) => ({
+        name: `Checkpoint ${baseN + i + 1}`,
+        lat: p.lat,
+        lng: p.lng,
+      }));
+      const next = [...prev];
+      next.splice(index + 1, 0, ...newCps);
+      return next;
+    });
+    return index + points.length;
+  };
+  const insertCheckpointsAfterRef = useRef(insertCheckpointsAfter);
+  insertCheckpointsAfterRef.current = insertCheckpointsAfter;
+  // Ref mirror of the latest route so map listeners (registered once per
+  // edit-mode session) can read the current origin checkpoint without
+  // re-subscribing on every route change.
+  const routeRef = useRef(route);
+  routeRef.current = route;
+  // Lazy-allocated DirectionsService client. Created on first Ctrl+click.
+  const directionsServiceRef = useRef<google.maps.DirectionsService | null>(
+    null,
+  );
+  // Guards against overlapping Ctrl+clicks while a Directions request is
+  // still in flight — clicking ten times fast would otherwise fire ten
+  // billable requests and splice ten chains into the route.
+  const routingInFlightRef = useRef(false);
   const resetRoute = () => {
     if (
       window.confirm(

@@ -311,8 +311,11 @@ export function DesktopControlPanel({
           <p className="text-xs text-neutral-400 leading-relaxed">
             Drag a marker to move it. Select a checkpoint, then right-click
             anywhere to insert a new one after it (Shift+right-click inserts
-            before). Middle-click deletes the selected checkpoint. Tab /
-            Shift+Tab steps the selection along the route.
+            before). Ctrl+click anywhere to auto-route (walking) from the
+            selected checkpoint to the click and drop in checkpoints along the
+            way (Shift+Ctrl+click = fewer, coarser points). Middle-click deletes
+            the selected checkpoint. Tab / Shift+Tab steps the selection along
+            the route.
           </p>
         )}
 

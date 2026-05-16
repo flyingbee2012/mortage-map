@@ -219,6 +219,65 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(value, max));
 }
 
+// Perpendicular distance, in meters, from point `p` to the line segment
+// `a`–`b`, computed in a local equirectangular projection anchored at `a`.
+// Accurate enough for RDP simplification at street/walking-route scales.
+function pointToSegmentMeters(p: LatLng, a: LatLng, b: LatLng): number {
+  const M_PER_DEG = 111320;
+  const cosLat = Math.cos((a.lat * Math.PI) / 180);
+  const bx = (b.lng - a.lng) * cosLat * M_PER_DEG;
+  const by = (b.lat - a.lat) * M_PER_DEG;
+  const px = (p.lng - a.lng) * cosLat * M_PER_DEG;
+  const py = (p.lat - a.lat) * M_PER_DEG;
+  const len2 = bx * bx + by * by;
+  if (len2 === 0) return Math.hypot(px, py);
+  let t = (px * bx + py * by) / len2;
+  t = Math.max(0, Math.min(1, t));
+  const cx = t * bx;
+  const cy = t * by;
+  return Math.hypot(px - cx, py - cy);
+}
+
+// Ramer–Douglas–Peucker polyline simplification. Returns a subset of the
+// input points that preserves the path's shape to within `toleranceMeters`
+// (perpendicular deviation). Straight runs collapse to their endpoints;
+// sharp turns are preserved. Iterative implementation so very long paths
+// don't blow the call stack.
+export function simplifyPath(
+  points: LatLng[],
+  toleranceMeters: number,
+): LatLng[] {
+  if (points.length <= 2) return points.slice();
+  const keep = new Array<boolean>(points.length).fill(false);
+  keep[0] = true;
+  keep[points.length - 1] = true;
+  const stack: Array<[number, number]> = [[0, points.length - 1]];
+  while (stack.length > 0) {
+    const [first, last] = stack.pop()!;
+    let maxDist = 0;
+    let idx = -1;
+    const a = points[first];
+    const b = points[last];
+    for (let i = first + 1; i < last; i++) {
+      const d = pointToSegmentMeters(points[i], a, b);
+      if (d > maxDist) {
+        maxDist = d;
+        idx = i;
+      }
+    }
+    if (idx !== -1 && maxDist > toleranceMeters) {
+      keep[idx] = true;
+      stack.push([first, idx]);
+      stack.push([idx, last]);
+    }
+  }
+  const result: LatLng[] = [];
+  for (let i = 0; i < points.length; i++) {
+    if (keep[i]) result.push(points[i]);
+  }
+  return result;
+}
+
 function distanceKm(a: LatLng, b: LatLng): number {
   const earthRadiusKm = 6371;
   const dLat = toRadians(b.lat - a.lat);
