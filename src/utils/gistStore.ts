@@ -98,7 +98,8 @@ export async function loadFromGist(): Promise<MortgageGistData | null> {
       currentBalance: parsed.currentBalance,
       route,
     };
-  } catch {
+  } catch (err) {
+    console.error("Failed to load from gist:", err);
     return null;
   }
 }
