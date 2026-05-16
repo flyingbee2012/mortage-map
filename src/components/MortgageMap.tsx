@@ -1061,6 +1061,31 @@ export default function JiuXiangMortgageMap() {
     return () => google.maps.event.removeListener(mapListener);
   }, [editMode, mapReady]);
 
+  // Alt+click anywhere on the map (in edit mode) appends a new checkpoint
+  // at the exact click location, immediately after the currently selected
+  // one, and moves selection to the new point so subsequent Alt+clicks
+  // chain. Intended as a fast manual-placement workflow for regions where
+  // the Directions API is unreliable (e.g. mainland China).
+  useEffect(() => {
+    if (!editMode || !mapReady || !mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+    const handler = (e: google.maps.MapMouseEvent) => {
+      const dom = e.domEvent as MouseEvent | undefined;
+      if (!dom?.altKey) return;
+      if (dom.ctrlKey || dom.shiftKey) return;
+      if (!e.latLng) return;
+      const selected = selectedIndexRef.current;
+      if (selected === null) return;
+      // Stop the click from also reaching the marker-selection handler.
+      e.stop?.();
+      const point: LatLng = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+      const lastInserted = insertCheckpointsAfterRef.current(selected, [point]);
+      setSelectedCheckpointIndex(lastInserted);
+    };
+    const mapListener = map.addListener("click", handler);
+    return () => google.maps.event.removeListener(mapListener);
+  }, [editMode, mapReady]);
+
   // Middle-mouse-click anywhere on the map (in edit mode) deletes the
   // currently selected checkpoint. Attached to the map's container div so
   // it fires whether the click lands on a marker, the polyline, or empty

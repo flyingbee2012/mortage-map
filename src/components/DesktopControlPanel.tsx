@@ -313,9 +313,10 @@ export function DesktopControlPanel({
             anywhere to insert a new one after it (Shift+right-click inserts
             before). Ctrl+click anywhere to auto-route (walking) from the
             selected checkpoint to the click and drop in checkpoints along the
-            way (Shift+Ctrl+click = fewer, coarser points). Middle-click deletes
-            the selected checkpoint. Tab / Shift+Tab steps the selection along
-            the route.
+            way (Shift+Ctrl+click = fewer, coarser points). Alt+click anywhere
+            to drop a single checkpoint at the click location (useful where
+            auto-routing is unreliable). Middle-click deletes the selected
+            checkpoint. Tab / Shift+Tab steps the selection along the route.
           </p>
         )}
 
