@@ -821,9 +821,11 @@ export default function JiuXiangMortgageMap() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCheckpointIndex, mapReady]);
 
-  // Non-edit mode: when the user picks a checkpoint from the list, briefly
-  // show its marker on the map (the build effect normally only renders start
-  // + end markers in non-edit mode). Auto-hides after a few seconds.
+  // Non-edit mode: when the user picks a checkpoint from the list, show its
+  // marker on the map (the build effect normally only renders start + end
+  // markers in non-edit mode). The marker stays visible until the selection
+  // changes, the route changes, or the user enters edit mode — at which
+  // point this effect's cleanup runs and removes it.
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current) return;
     if (editMode) return;
@@ -851,12 +853,7 @@ export default function JiuXiangMortgageMap() {
       isSelected: true,
     });
 
-    const timeoutId = window.setTimeout(() => {
-      marker.setMap(null);
-    }, 2000);
-
     return () => {
-      window.clearTimeout(timeoutId);
       marker.setMap(null);
     };
   }, [selectedCheckpointIndex, editMode, mapReady, route]);
