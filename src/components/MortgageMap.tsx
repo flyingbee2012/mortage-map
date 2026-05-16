@@ -977,25 +977,48 @@ export default function JiuXiangMortgageMap() {
     return () => window.removeEventListener("keydown", handler);
   }, [editMode, route.length]);
 
-  // Ctrl+click anywhere on the map (in edit mode) calls the Google
-  // Directions API to walk-route from the currently selected checkpoint
-  // to the clicked location, then splices the simplified path in as new
-  // checkpoints. Shift+Ctrl+click uses a coarser simplification tolerance
-  // (fewer points) for quick rough sketches.
+  // Modifier-click handlers on the map (edit mode only). One listener
+  // dispatches by modifier so we only attach a single "click" listener to
+  // the map and the modifier branches stay visibly grouped:
+  //   • Ctrl+click          → auto-route (walking) from the selected
+  //                            checkpoint to the click via the Google
+  //                            Directions API, simplified and spliced in.
+  //   • Shift+Ctrl+click    → same, but coarser simplification (fewer,
+  //                            quicker points for rough sketching).
+  //   • Alt+click           → drop a single checkpoint at the exact click
+  //                            location after the selected one. Bypasses
+  //                            the Directions API; useful where routing is
+  //                            unreliable (e.g. mainland China).
   //
-  // Cost: each Ctrl+click is one Directions API request (~$0.005 in the
-  // standard tier, well under Google's monthly free credit for personal
-  // use). `routingInFlightRef` ensures rapid clicks don't fire concurrent
-  // billable requests.
+  // Cost note: each Ctrl+click is one Directions API request (~$0.005 in
+  // the standard tier, well under Google's monthly free credit for
+  // personal use). `routingInFlightRef` ensures rapid clicks don't fire
+  // concurrent billable requests.
   useEffect(() => {
     if (!editMode || !mapReady || !mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
     const handler = async (e: google.maps.MapMouseEvent) => {
       const dom = e.domEvent as MouseEvent | undefined;
-      if (!dom?.ctrlKey) return;
+      if (!dom) return;
       if (!e.latLng) return;
       const selected = selectedIndexRef.current;
       if (selected === null) return;
+
+      // Alt+click: drop a single checkpoint at the click location. Ignore
+      // if any other modifier is also held so this stays clearly distinct
+      // from the Ctrl+click branch.
+      if (dom.altKey && !dom.ctrlKey && !dom.shiftKey) {
+        e.stop?.();
+        const point: LatLng = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+        const lastInserted = insertCheckpointsAfterRef.current(selected, [
+          point,
+        ]);
+        setSelectedCheckpointIndex(lastInserted);
+        return;
+      }
+
+      // Ctrl+click (with optional Shift): auto-route via Directions API.
+      if (!dom.ctrlKey) return;
       const origin = routeRef.current[selected];
       if (!origin) return;
       if (routingInFlightRef.current) return;
@@ -1056,31 +1079,6 @@ export default function JiuXiangMortgageMap() {
       } finally {
         routingInFlightRef.current = false;
       }
-    };
-    const mapListener = map.addListener("click", handler);
-    return () => google.maps.event.removeListener(mapListener);
-  }, [editMode, mapReady]);
-
-  // Alt+click anywhere on the map (in edit mode) appends a new checkpoint
-  // at the exact click location, immediately after the currently selected
-  // one, and moves selection to the new point so subsequent Alt+clicks
-  // chain. Intended as a fast manual-placement workflow for regions where
-  // the Directions API is unreliable (e.g. mainland China).
-  useEffect(() => {
-    if (!editMode || !mapReady || !mapInstanceRef.current) return;
-    const map = mapInstanceRef.current;
-    const handler = (e: google.maps.MapMouseEvent) => {
-      const dom = e.domEvent as MouseEvent | undefined;
-      if (!dom?.altKey) return;
-      if (dom.ctrlKey || dom.shiftKey) return;
-      if (!e.latLng) return;
-      const selected = selectedIndexRef.current;
-      if (selected === null) return;
-      // Stop the click from also reaching the marker-selection handler.
-      e.stop?.();
-      const point: LatLng = { lat: e.latLng.lat(), lng: e.latLng.lng() };
-      const lastInserted = insertCheckpointsAfterRef.current(selected, [point]);
-      setSelectedCheckpointIndex(lastInserted);
     };
     const mapListener = map.addListener("click", handler);
     return () => google.maps.event.removeListener(mapListener);
