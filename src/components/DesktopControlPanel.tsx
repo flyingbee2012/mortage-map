@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import { CheckpointNameInput } from "./CheckpointNameInput";
+import { CheckpointRow } from "./CheckpointRow";
 import { MortgageInputs } from "./MortgageInputs";
 import {
   Checkpoint,
@@ -329,33 +329,18 @@ export function DesktopControlPanel({
             {route.map((checkpoint, index) => {
               const isSelected = selectedCheckpointIndex === index;
               return (
-                <li
+                <CheckpointRow
                   key={index}
-                  ref={isSelected ? selectedListItemRef : undefined}
-                  onClick={() => setSelectedCheckpointIndex(index)}
-                  className={`flex items-center gap-1 text-xs rounded px-1 py-0.5 cursor-pointer transition ${
-                    isSelected
-                      ? "bg-amber-500/20 ring-1 ring-amber-400/60"
-                      : "hover:bg-neutral-700/40"
-                  }`}
-                >
-                  <span className="shrink-0 w-10 text-right tabular-nums text-neutral-500">
-                    {index + 1}.
-                  </span>
-                  {editMode ? (
-                    <CheckpointNameInput
-                      initialName={checkpoint.name}
-                      onCommit={(name) => renameCheckpoint(index, name)}
-                    />
-                  ) : (
-                    <span
-                      className="flex-1 min-w-0 truncate text-neutral-200"
-                      title={`${checkpoint.name} (${checkpoint.lat.toFixed(3)}, ${checkpoint.lng.toFixed(3)})`}
-                    >
-                      {checkpoint.name}
-                    </span>
-                  )}
-                </li>
+                  index={index}
+                  name={checkpoint.name}
+                  lat={checkpoint.lat}
+                  lng={checkpoint.lng}
+                  isSelected={isSelected}
+                  editMode={editMode}
+                  rowRef={isSelected ? selectedListItemRef : undefined}
+                  onSelect={setSelectedCheckpointIndex}
+                  onRename={renameCheckpoint}
+                />
               );
             })}
           </ol>

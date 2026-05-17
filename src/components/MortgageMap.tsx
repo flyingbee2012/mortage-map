@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DesktopControlPanel } from "./DesktopControlPanel";
 import { MobileControlPanel } from "./MobileControlPanel";
 import { MapView } from "./MapView";
@@ -1144,11 +1144,11 @@ export default function JiuXiangMortgageMap() {
   }, [currentPosition, editMode, mapReady, bottomOverlayPx]);
 
   // Route mutation helpers.
-  const renameCheckpoint = (index: number, name: string) => {
+  const renameCheckpoint = useCallback((index: number, name: string) => {
     setRoute((prev) =>
       prev.map((cp, i) => (i === index ? { ...cp, name } : cp)),
     );
-  };
+  }, []);
   const insertCheckpointAt = (index: number) => {
     setRoute((prev) => {
       if (index <= 0 || index > prev.length) return prev;
