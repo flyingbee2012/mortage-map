@@ -249,9 +249,6 @@ export default function JiuXiangMortgageMap() {
   }, []);
   // Snapshot of the route taken when edit mode begins, so Cancel can revert.
   const editSnapshotRef = useRef<Checkpoint[] | null>(null);
-  // Ref to the currently selected list item, so we can scroll it into view
-  // when the user clicks its marker on the map.
-  const selectedListItemRef = useRef<HTMLLIElement | null>(null);
 
   // Ref mirror of selectedCheckpointIndex so the marker-build effect can
   // read the latest value without listing it as a dep (which would force a
@@ -270,15 +267,6 @@ export default function JiuXiangMortgageMap() {
       setSelectedCheckpointIndex(null);
     }
   }, [route.length, selectedCheckpointIndex]);
-
-  // Scroll the selected list item into view when selection changes.
-  useEffect(() => {
-    if (selectedCheckpointIndex === null) return;
-    selectedListItemRef.current?.scrollIntoView({
-      block: "nearest",
-      behavior: "smooth",
-    });
-  }, [selectedCheckpointIndex]);
 
   // Pan the map to the selected checkpoint if it's outside the current view.
   useEffect(() => {
@@ -1320,7 +1308,6 @@ export default function JiuXiangMortgageMap() {
             cancelEditingRoute={cancelEditingRoute}
             selectedCheckpointIndex={selectedCheckpointIndex}
             setSelectedCheckpointIndex={setSelectedCheckpointIndex}
-            selectedListItemRef={selectedListItemRef}
             renameCheckpoint={renameCheckpoint}
             fitMapToRoute={fitMapToRoute}
             exportRouteJson={exportRouteJson}

@@ -1,43 +1,45 @@
-import { memo, useCallback, type RefObject } from "react";
+import { useCallback } from "react";
+import type { RowComponentProps } from "react-window";
 import { CheckpointNameInput } from "./CheckpointNameInput";
+import type { Checkpoint } from "../utils/helper";
 
-// Per-row component, memoized so the ~8k checkpoint list doesn't fully
-// re-render on every route mutation (Alt+click insert, drag, rename). Only
-// rows whose props actually change get reconciled; for an insert that's
-// the inserted row + the previously-selected row + the newly-selected row.
-type CheckpointRowProps = {
-  index: number;
-  name: string;
-  lat: number;
-  lng: number;
-  isSelected: boolean;
+// Row props passed to react-window's List. The `route` / `selectedIndex` /
+// `editMode` / handlers come from the parent via `rowProps`; react-window
+// adds `index` / `style` / `ariaAttributes` per row. Only the rows actually
+// in the viewport (~20–30 of 8k) are rendered, so memoization isn't needed
+// here anymore — the wins now come from not rendering 8k rows at all.
+export type CheckpointRowExtraProps = {
+  route: Checkpoint[];
+  selectedIndex: number | null;
   editMode: boolean;
-  rowRef?: RefObject<HTMLLIElement>;
   onSelect: (i: number) => void;
   onRename: (index: number, name: string) => void;
 };
 
-export const CheckpointRow = memo(function CheckpointRow({
+export function CheckpointRow({
   index,
-  name,
-  lat,
-  lng,
-  isSelected,
+  style,
+  ariaAttributes,
+  route,
+  selectedIndex,
   editMode,
-  rowRef,
   onSelect,
   onRename,
-}: CheckpointRowProps) {
+}: RowComponentProps<CheckpointRowExtraProps>) {
+  const checkpoint = route[index];
+  const isSelected = selectedIndex === index;
   const handleClick = useCallback(() => onSelect(index), [onSelect, index]);
   const handleCommit = useCallback(
     (next: string) => onRename(index, next),
     [onRename, index],
   );
+  if (!checkpoint) return null;
   return (
-    <li
-      ref={rowRef}
+    <div
+      {...ariaAttributes}
+      style={style}
       onClick={handleClick}
-      className={`flex items-center gap-1 text-xs rounded px-1 py-0.5 cursor-pointer transition ${
+      className={`flex items-center gap-1 text-xs rounded px-1 cursor-pointer transition ${
         isSelected
           ? "bg-amber-500/20 ring-1 ring-amber-400/60"
           : "hover:bg-neutral-700/40"
@@ -47,15 +49,18 @@ export const CheckpointRow = memo(function CheckpointRow({
         {index + 1}.
       </span>
       {editMode ? (
-        <CheckpointNameInput initialName={name} onCommit={handleCommit} />
+        <CheckpointNameInput
+          initialName={checkpoint.name}
+          onCommit={handleCommit}
+        />
       ) : (
         <span
           className="flex-1 min-w-0 truncate text-neutral-200"
-          title={`${name} (${lat.toFixed(3)}, ${lng.toFixed(3)})`}
+          title={`${checkpoint.name} (${checkpoint.lat.toFixed(3)}, ${checkpoint.lng.toFixed(3)})`}
         >
-          {name}
+          {checkpoint.name}
         </span>
       )}
-    </li>
+    </div>
   );
-});
+}

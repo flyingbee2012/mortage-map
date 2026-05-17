@@ -1,4 +1,5 @@
-import type { RefObject } from "react";
+import { useEffect } from "react";
+import { List, useListRef } from "react-window";
 import { CheckpointRow } from "./CheckpointRow";
 import { MortgageInputs } from "./MortgageInputs";
 import {
@@ -45,7 +46,6 @@ type DesktopControlPanelProps = {
   cancelEditingRoute: () => void;
   selectedCheckpointIndex: number | null;
   setSelectedCheckpointIndex: (i: number | null) => void;
-  selectedListItemRef: RefObject<HTMLLIElement>;
   renameCheckpoint: (index: number, name: string) => void;
   fitMapToRoute: () => void;
   exportRouteJson: () => void;
@@ -90,13 +90,23 @@ export function DesktopControlPanel({
   cancelEditingRoute,
   selectedCheckpointIndex,
   setSelectedCheckpointIndex,
-  selectedListItemRef,
   renameCheckpoint,
   fitMapToRoute,
   exportRouteJson,
   resetRoute,
   isLoadingRemote,
 }: DesktopControlPanelProps) {
+  // react-window list ref so we can scroll the selected checkpoint into
+  // view when it changes from outside the list (Tab navigation, marker
+  // click on the map, right-click insert).
+  const listRef = useListRef(null);
+  useEffect(() => {
+    if (selectedCheckpointIndex === null) return;
+    listRef.current?.scrollToRow({
+      index: selectedCheckpointIndex,
+      align: "auto",
+    });
+  }, [selectedCheckpointIndex, listRef]);
   return (
     <section className="rounded-2xl bg-neutral-900 shadow-xl p-4 flex-none w-[380px] h-full flex flex-col gap-3">
       {!editMode && (
@@ -325,25 +335,23 @@ export function DesktopControlPanel({
             No checkpoints yet. Turn on edit mode and click the map to add some.
           </p>
         ) : (
-          <ol className="space-y-1 overflow-y-auto pr-1 flex-1 min-h-0">
-            {route.map((checkpoint, index) => {
-              const isSelected = selectedCheckpointIndex === index;
-              return (
-                <CheckpointRow
-                  key={index}
-                  index={index}
-                  name={checkpoint.name}
-                  lat={checkpoint.lat}
-                  lng={checkpoint.lng}
-                  isSelected={isSelected}
-                  editMode={editMode}
-                  rowRef={isSelected ? selectedListItemRef : undefined}
-                  onSelect={setSelectedCheckpointIndex}
-                  onRename={renameCheckpoint}
-                />
-              );
-            })}
-          </ol>
+          <div className="flex-1 min-h-0 pr-1">
+            <List
+              listRef={listRef}
+              rowCount={route.length}
+              rowHeight={editMode ? 36 : 24}
+              rowComponent={CheckpointRow}
+              rowProps={{
+                route,
+                selectedIndex: selectedCheckpointIndex,
+                editMode,
+                onSelect: setSelectedCheckpointIndex,
+                onRename: renameCheckpoint,
+              }}
+              overscanCount={6}
+              style={{ height: "100%" }}
+            />
+          </div>
         )}
 
         {editMode && (
