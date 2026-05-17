@@ -4,6 +4,7 @@ import { MobileControlPanel } from "./MobileControlPanel";
 import { MapView } from "./MapView";
 import {
   Checkpoint,
+  amapDrivingPath,
   clamp,
   compactCheckpoints,
   getCurrentCheckpointFromSegments,
@@ -13,6 +14,7 @@ import {
   loadGoogleMaps,
   loadStoredNumber,
   loadStoredRoute,
+  outOfChina,
   saveStoredNumber,
   saveStoredRoute,
   clearStoredRoute,
@@ -38,6 +40,12 @@ import { isGistConfigured, loadFromGist, saveToGist } from "../utils/gistStore";
 
 const GOOGLE_MAPS_API_KEY: string =
   (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined) ?? "";
+// AMap (高德) web-service key. When set, Ctrl+click whose origin is in
+// mainland China routes via AMap's driving API instead of Google Directions
+// (which has poor coverage in China). Output is converted from GCJ-02 →
+// WGS-84 before splicing into the route.
+const AMAP_KEY: string =
+  (import.meta.env.VITE_AMAP_KEY as string | undefined) ?? "";
 const ORIGINAL_PRINCIPAL_STORAGE_KEY = "mortgageMap.originalPrincipal.v1";
 const CURRENT_BALANCE_STORAGE_KEY = "mortgageMap.currentBalance.v1";
 
@@ -1017,21 +1025,34 @@ export default function JiuXiangMortgageMap() {
       routingInFlightRef.current = true;
       const dest = { lat: e.latLng.lat(), lng: e.latLng.lng() };
       const tolerance = dom.shiftKey ? 20 : 5;
+      // Use AMap driving directions when both endpoints are in mainland
+      // China and a key is configured — Google Directions has very poor
+      // coverage in China. Otherwise fall back to Google walking.
+      const useAmap =
+        AMAP_KEY !== "" &&
+        !outOfChina(origin.lat, origin.lng) &&
+        !outOfChina(dest.lat, dest.lng);
       try {
-        if (directionsServiceRef.current === null) {
-          directionsServiceRef.current = new google.maps.DirectionsService();
+        let raw: LatLng[];
+        if (useAmap) {
+          raw = await amapDrivingPath(
+            AMAP_KEY,
+            { lat: origin.lat, lng: origin.lng },
+            dest,
+          );
+        } else {
+          if (directionsServiceRef.current === null) {
+            directionsServiceRef.current = new google.maps.DirectionsService();
+          }
+          const result = await directionsServiceRef.current.route({
+            origin: { lat: origin.lat, lng: origin.lng },
+            destination: dest,
+            travelMode: google.maps.TravelMode.WALKING,
+          });
+          const path = result.routes[0]?.overview_path ?? [];
+          raw = path.map((ll) => ({ lat: ll.lat(), lng: ll.lng() }));
         }
-        const result = await directionsServiceRef.current.route({
-          origin: { lat: origin.lat, lng: origin.lng },
-          destination: dest,
-          travelMode: google.maps.TravelMode.WALKING,
-        });
-        const path = result.routes[0]?.overview_path ?? [];
-        if (path.length === 0) return;
-        const raw: LatLng[] = path.map((ll) => ({
-          lat: ll.lat(),
-          lng: ll.lng(),
-        }));
+        if (raw.length === 0) return;
         // Simplify to drop redundant points on straight runs while keeping
         // sharp corners. Then drop the first point (it's the origin we
         // already have in the route) and cap to a sane maximum so a wildly
@@ -1056,12 +1077,12 @@ export default function JiuXiangMortgageMap() {
         );
         setSelectedCheckpointIndex(lastInserted);
       } catch (err) {
-        // Most likely cause: Directions API isn't enabled on the Google
-        // Cloud project, or referer restrictions block it. Fall back to
-        // the existing midpoint-insert behavior so the user still gets a
-        // checkpoint, and surface the reason once.
+        // Most likely causes: Directions/AMap API isn't enabled, key is
+        // wrong, network blocked, or no route between the points. Fall
+        // back to the existing midpoint-insert behavior so the user still
+        // gets a checkpoint, and surface the reason once.
         console.warn(
-          "Directions request failed, falling back to midpoint:",
+          "Routing request failed, falling back to midpoint:",
           err,
         );
         insertCheckpointAtRef.current(selected + 1);

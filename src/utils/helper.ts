@@ -215,6 +215,147 @@ export function toDegrees(radians: number): number {
   return (radians * 180) / Math.PI;
 }
 
+// --- GCJ-02 (Mars) <-> WGS-84 conversion ------------------------------------
+// AMap returns coordinates in China's mandatory GCJ-02 ("Mars") datum.
+// Google Maps JS renders in WGS-84, so AMap output must be converted before
+// we plot it. The polynomials below are the standard "eviltransform" form
+// used by every open-source library that does this. Accurate to ~1 m within
+// mainland China; identity transform outside (where GCJ-02 doesn't apply).
+const GCJ_A = 6378245.0;
+const GCJ_EE = 0.00669342162296594323;
+function transformLat(x: number, y: number): number {
+  let ret =
+    -100 +
+    2 * x +
+    3 * y +
+    0.2 * y * y +
+    0.1 * x * y +
+    0.2 * Math.sqrt(Math.abs(x));
+  ret +=
+    ((20 * Math.sin(6 * x * Math.PI) + 20 * Math.sin(2 * x * Math.PI)) * 2) / 3;
+  ret +=
+    ((20 * Math.sin(y * Math.PI) + 40 * Math.sin((y / 3) * Math.PI)) * 2) / 3;
+  ret +=
+    ((160 * Math.sin((y / 12) * Math.PI) + 320 * Math.sin((y * Math.PI) / 30)) *
+      2) /
+    3;
+  return ret;
+}
+function transformLng(x: number, y: number): number {
+  let ret =
+    300 + x + 2 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+  ret +=
+    ((20 * Math.sin(6 * x * Math.PI) + 20 * Math.sin(2 * x * Math.PI)) * 2) / 3;
+  ret +=
+    ((20 * Math.sin(x * Math.PI) + 40 * Math.sin((x / 3) * Math.PI)) * 2) / 3;
+  ret +=
+    ((150 * Math.sin((x / 12) * Math.PI) + 300 * Math.sin((x / 30) * Math.PI)) *
+      2) /
+    3;
+  return ret;
+}
+export function outOfChina(lat: number, lng: number): boolean {
+  if (lng < 72.004 || lng > 137.8347) return true;
+  if (lat < 0.8293 || lat > 55.8271) return true;
+  return false;
+}
+function gcjDelta(lat: number, lng: number): { dLat: number; dLng: number } {
+  let dLat = transformLat(lng - 105, lat - 35);
+  let dLng = transformLng(lng - 105, lat - 35);
+  const radLat = (lat / 180) * Math.PI;
+  let magic = Math.sin(radLat);
+  magic = 1 - GCJ_EE * magic * magic;
+  const sqrtMagic = Math.sqrt(magic);
+  dLat =
+    (dLat * 180) / (((GCJ_A * (1 - GCJ_EE)) / (magic * sqrtMagic)) * Math.PI);
+  dLng = (dLng * 180) / ((GCJ_A / sqrtMagic) * Math.cos(radLat) * Math.PI);
+  return { dLat, dLng };
+}
+export function wgs84ToGcj02(
+  lat: number,
+  lng: number,
+): { lat: number; lng: number } {
+  if (outOfChina(lat, lng)) return { lat, lng };
+  const { dLat, dLng } = gcjDelta(lat, lng);
+  return { lat: lat + dLat, lng: lng + dLng };
+}
+export function gcj02ToWgs84(
+  lat: number,
+  lng: number,
+): { lat: number; lng: number } {
+  if (outOfChina(lat, lng)) return { lat, lng };
+  // Iteratively invert: start with first-order estimate, then refine once.
+  const approx = wgs84ToGcj02(lat, lng);
+  const dLat2 = approx.lat - lat;
+  const dLng2 = approx.lng - lng;
+  return { lat: lat - dLat2, lng: lng - dLng2 };
+}
+
+// --- AMap driving directions (mainland China) -------------------------------
+// Returns the full driving path as WGS-84 LatLngs, already converted from
+// AMap's native GCJ-02 datum. Concatenates every step's `polyline` field.
+// Throws on network / API errors; the caller can fall back to Google.
+export async function amapDrivingPath(
+  apiKey: string,
+  origin: LatLng,
+  destination: LatLng,
+): Promise<LatLng[]> {
+  // AMap interprets query-string coords as GCJ-02. Our checkpoints are
+  // WGS-84 (Google), so shift them into GCJ-02 before sending, then shift
+  // the returned polyline back to WGS-84 for plotting on Google Maps.
+  const originGcj = wgs84ToGcj02(origin.lat, origin.lng);
+  const destGcj = wgs84ToGcj02(destination.lat, destination.lng);
+  const url =
+    `https://restapi.amap.com/v3/direction/driving?key=${apiKey}` +
+    `&origin=${originGcj.lng.toFixed(6)},${originGcj.lat.toFixed(6)}` +
+    `&destination=${destGcj.lng.toFixed(6)},${destGcj.lat.toFixed(6)}` +
+    // strategy=2 = shortest distance. Default (0) is fastest and tends
+    // to detour onto highways even for short clicks, which produces
+    // U-turn loops when the GCJ-shifted destination lands on the far
+    // carriageway of a divided road.
+    `&strategy=2&extensions=base&output=JSON`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`AMap HTTP ${resp.status}`);
+  const data = await resp.json();
+  if (data.status !== "1") {
+    throw new Error(`AMap error: ${data.info ?? "unknown"} (${data.infocode})`);
+  }
+  const steps = data.route?.paths?.[0]?.steps ?? [];
+  const out: LatLng[] = [];
+  for (const step of steps) {
+    const polyline: string | undefined = step.polyline;
+    if (!polyline) continue;
+    for (const pair of polyline.split(";")) {
+      const [lngStr, latStr] = pair.split(",");
+      const lng = Number(lngStr);
+      const lat = Number(latStr);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      const wgs = gcj02ToWgs84(lat, lng);
+      // Skip exact duplicates at step boundaries.
+      const last = out[out.length - 1];
+      if (last && last.lat === wgs.lat && last.lng === wgs.lng) continue;
+      out.push(wgs);
+    }
+  }
+  // Debug: log first/last raw + converted point so we can eyeball whether
+  // the conversion is needed in either direction. Remove once verified.
+  if (steps.length > 0 && out.length > 0) {
+    const firstRaw = steps[0].polyline?.split(";")[0];
+    // eslint-disable-next-line no-console
+    console.log(
+      "[AMap] sent origin (GCJ)",
+      originGcj,
+      "raw first pt",
+      firstRaw,
+      "converted first pt (WGS)",
+      out[0],
+      "converted last pt (WGS)",
+      out[out.length - 1],
+    );
+  }
+  return out;
+}
+
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(value, max));
 }
