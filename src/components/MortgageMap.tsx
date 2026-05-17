@@ -258,6 +258,30 @@ export default function JiuXiangMortgageMap() {
   // Snapshot of the route taken when edit mode begins, so Cancel can revert.
   const editSnapshotRef = useRef<Checkpoint[] | null>(null);
 
+  // Undo / redo stacks for route edits (Ctrl+Z / Ctrl+Shift+Z). Both are
+  // cleared whenever edit mode starts or ends — undo history is scoped to
+  // a single editing session so it never leaks across Save/Cancel. Capped
+  // at UNDO_LIMIT to bound memory for very long editing sessions. Each
+  // entry snapshots the route AND the selected index so undo restores the
+  // focus the user had at that moment.
+  const UNDO_LIMIT = 100;
+  type UndoEntry = { route: Checkpoint[]; selected: number | null };
+  const undoStackRef = useRef<UndoEntry[]>([]);
+  const redoStackRef = useRef<UndoEntry[]>([]);
+  // Push the CURRENT route + selection onto the undo stack. Call this from
+  // any code path that's about to mutate the route while in edit mode.
+  // Clears the redo stack (standard editor behavior — a new action discards
+  // the redo future).
+  const pushUndo = useCallback(() => {
+    const stack = undoStackRef.current;
+    stack.push({
+      route: routeRef.current,
+      selected: selectedIndexRef.current,
+    });
+    if (stack.length > UNDO_LIMIT) stack.shift();
+    redoStackRef.current = [];
+  }, []);
+
   // Ref mirror of selectedCheckpointIndex so the marker-build effect can
   // read the latest value without listing it as a dep (which would force a
   // full marker rebuild on every selection change).
@@ -298,10 +322,14 @@ export default function JiuXiangMortgageMap() {
 
   const startEditingRoute = () => {
     editSnapshotRef.current = route;
+    undoStackRef.current = [];
+    redoStackRef.current = [];
     setEditMode(true);
   };
   const finishEditingRoute = () => {
     editSnapshotRef.current = null;
+    undoStackRef.current = [];
+    redoStackRef.current = [];
     setEditMode(false);
     if (!isGistConfigured()) {
       showFlash("local-only", "✓ Route saved locally");
@@ -328,6 +356,8 @@ export default function JiuXiangMortgageMap() {
       setRoute(editSnapshotRef.current);
     }
     editSnapshotRef.current = null;
+    undoStackRef.current = [];
+    redoStackRef.current = [];
     setEditMode(false);
   };
 
@@ -762,6 +792,7 @@ export default function JiuXiangMortgageMap() {
           if (!event.latLng) return;
           const newLat = event.latLng.lat();
           const newLng = event.latLng.lng();
+          pushUndo();
           setRoute((prev) =>
             prev.map((cp, i) =>
               i === index ? { ...cp, lat: newLat, lng: newLng } : cp,
@@ -939,9 +970,59 @@ export default function JiuXiangMortgageMap() {
   // contenteditable has focus so the user can still tab through the
   // checkpoint name fields normally. Clamps at the ends of the route
   // (no wrap-around).
+  //
+  // Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y) undo / redo the last route mutation.
+  // Scope is the current editing session — stacks are cleared on enter /
+  // exit so undo never reaches across a Save or Cancel.
   useEffect(() => {
     if (!editMode) return;
     const handler = (e: KeyboardEvent) => {
+      // Undo / redo. Skip when the user is typing in an input so Ctrl+Z
+      // still does the native text undo there.
+      if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z" || e.key === "y" || e.key === "Y")) {
+        const active = document.activeElement as HTMLElement | null;
+        if (active) {
+          const tag = active.tagName;
+          if (tag === "INPUT" || tag === "TEXTAREA" || active.isContentEditable) {
+            return;
+          }
+        }
+        const isRedo =
+          e.key === "y" || e.key === "Y" || ((e.key === "z" || e.key === "Z") && e.shiftKey);
+        if (isRedo) {
+          const next = redoStackRef.current.pop();
+          if (!next) {
+            e.preventDefault();
+            return;
+          }
+          undoStackRef.current.push({
+            route: routeRef.current,
+            selected: selectedIndexRef.current,
+          });
+          if (undoStackRef.current.length > UNDO_LIMIT) {
+            undoStackRef.current.shift();
+          }
+          setRoute(next.route);
+          setSelectedCheckpointIndex(next.selected);
+        } else {
+          const prev = undoStackRef.current.pop();
+          if (!prev) {
+            e.preventDefault();
+            return;
+          }
+          redoStackRef.current.push({
+            route: routeRef.current,
+            selected: selectedIndexRef.current,
+          });
+          if (redoStackRef.current.length > UNDO_LIMIT) {
+            redoStackRef.current.shift();
+          }
+          setRoute(prev.route);
+          setSelectedCheckpointIndex(prev.selected);
+        }
+        e.preventDefault();
+        return;
+      }
       if (e.key !== "Tab") return;
       const active = document.activeElement as HTMLElement | null;
       if (active) {
@@ -1153,12 +1234,17 @@ export default function JiuXiangMortgageMap() {
   }, [currentPosition, editMode, mapReady, bottomOverlayPx]);
 
   // Route mutation helpers.
-  const renameCheckpoint = useCallback((index: number, name: string) => {
-    setRoute((prev) =>
-      prev.map((cp, i) => (i === index ? { ...cp, name } : cp)),
-    );
-  }, []);
+  const renameCheckpoint = useCallback(
+    (index: number, name: string) => {
+      pushUndo();
+      setRoute((prev) =>
+        prev.map((cp, i) => (i === index ? { ...cp, name } : cp)),
+      );
+    },
+    [pushUndo],
+  );
   const insertCheckpointAt = (index: number) => {
+    let didMutate = false;
     setRoute((prev) => {
       if (index <= 0 || index > prev.length) return prev;
       const before = prev[index - 1];
@@ -1173,15 +1259,38 @@ export default function JiuXiangMortgageMap() {
         lat,
         lng,
       });
+      didMutate = true;
+      // Push BEFORE returning the new array so the undo target is the
+      // previous route, not the freshly inserted one.
+      undoStackRef.current.push({
+        route: prev,
+        selected: selectedIndexRef.current,
+      });
+      if (undoStackRef.current.length > UNDO_LIMIT) {
+        undoStackRef.current.shift();
+      }
+      redoStackRef.current = [];
       return next;
     });
+    void didMutate;
   };
   // Ref mirror so the map-level rightclick listener (registered once per
   // edit-mode session) always calls the freshest insertCheckpointAt.
   const insertCheckpointAtRef = useRef(insertCheckpointAt);
   insertCheckpointAtRef.current = insertCheckpointAt;
   const deleteCheckpoint = (index: number) => {
-    setRoute((prev) => prev.filter((_, i) => i !== index));
+    setRoute((prev) => {
+      if (index < 0 || index >= prev.length) return prev;
+      undoStackRef.current.push({
+        route: prev,
+        selected: selectedIndexRef.current,
+      });
+      if (undoStackRef.current.length > UNDO_LIMIT) {
+        undoStackRef.current.shift();
+      }
+      redoStackRef.current = [];
+      return prev.filter((_, i) => i !== index);
+    });
   };
   // Ref mirror so the middle-click listener always calls the freshest
   // deleteCheckpoint (same pattern as insertCheckpointAtRef).
@@ -1203,6 +1312,14 @@ export default function JiuXiangMortgageMap() {
       }));
       const next = [...prev];
       next.splice(index + 1, 0, ...newCps);
+      undoStackRef.current.push({
+        route: prev,
+        selected: selectedIndexRef.current,
+      });
+      if (undoStackRef.current.length > UNDO_LIMIT) {
+        undoStackRef.current.shift();
+      }
+      redoStackRef.current = [];
       return next;
     });
     return index + points.length;
